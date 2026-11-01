@@ -1,0 +1,1005 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#a9dcff">
+<title>Panda Su Yolu - Panda Games Studio</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;touch-action:manipulation}
+html,body{position:fixed;inset:0;width:100%;height:100%;overflow:hidden;overscroll-behavior:none;background:linear-gradient(#a9dcff 0%,#dff4ff 52%,#9ed565 53%,#8bcc52 100%);font-family:"Baloo 2","Arial Rounded MT Bold","Trebuchet MS",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+/* ---------- TAM EKRAN ÖLÇEKLEME ----------
+   Oyun 1024x768 tasarım alanına göre çizilir. #stage, ekranın en-boy oranına göre genişletilir
+   (genişlik = ekranGenişliği/s, yükseklik = ekranYüksekliği/s) ve s = min(W/1024, H/768) ile ölçeklenir.
+   Böylece oyun alanı (1024x768) her zaman tamamen görünür ve ortadadır; arka plan ve üst bar
+   ekranın kenarlarına kadar uzanır → siyah/boş şerit kalmaz. */
+#stage{position:absolute;left:0;top:0;width:1024px;height:768px;transform-origin:0 0;overflow:hidden;--ox:0px;--oy:0px;--safeL:0px;--safeR:0px;--sh:768px;will-change:transform}
+#safeProbe{position:fixed;left:0;top:0;width:0;height:0;visibility:hidden;pointer-events:none;padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)}
+#bg{position:absolute;left:0;top:0}
+#sunRays{position:absolute;width:140px;height:140px;margin:-70px 0 0 -70px;left:770px;top:62px;pointer-events:none;will-change:transform;animation:spinS 30s linear infinite}
+.screen{position:absolute;left:50%;top:50%;width:1024px;height:768px;margin:-384px 0 0 -512px;display:none}
+.screen.on{display:block}
+button{font-family:inherit;cursor:pointer}
+.btn{border:4px solid #fff;border-radius:24px;color:#fff;font-weight:900;font-size:26px;padding:10px 22px;display:inline-flex;align-items:center;justify-content:center;gap:10px;text-shadow:0 2px 0 rgba(0,0,0,.18);box-shadow:0 6px 0 rgba(0,0,0,.16),0 10px 18px rgba(0,0,0,.12),inset 0 -5px 0 rgba(0,0,0,.12);transition:transform .08s}
+.btn:active{transform:translateY(4px) scale(.98);box-shadow:0 2px 0 rgba(0,0,0,.16),inset 0 -3px 0 rgba(0,0,0,.12)}
+.btn svg{flex:none}
+.orange{background:linear-gradient(#ffc04d,#ff8c1a)}
+.pink{background:linear-gradient(#ff9ccb,#ff5fa6)}
+.green{background:linear-gradient(#7fe05a,#3dbb2c)}
+.blue{background:linear-gradient(#6cc6ff,#2b96f0)}
+.purple{background:linear-gradient(#c79bff,#9254f0)}
+.grey{background:linear-gradient(#c9cfd6,#9aa3ad)}
+.sq{width:72px;height:72px;padding:0;border-radius:22px}
+.rainbow span{display:inline-block;-webkit-text-stroke:3px #fff;paint-order:stroke fill;text-shadow:0 4px 0 rgba(0,0,0,.12)}
+
+/* ---------- GAME ---------- */
+#plumb{position:absolute;left:0;top:0;pointer-events:none;z-index:2;overflow:visible}
+#board{position:absolute;z-index:1;touch-action:none;cursor:pointer;background:linear-gradient(#a7e86c,#86d04f);border:4px solid #76bf43;border-radius:26px;padding:12px;box-shadow:0 10px 0 rgba(60,120,30,.25),0 16px 30px rgba(0,0,0,.12)}
+#board::before{content:"";position:absolute;left:24px;right:24px;top:-12px;height:14px;background:radial-gradient(circle at 10px 14px,#8fd85a 9px,transparent 10px) 0 0/34px 14px repeat-x}
+#board::after{content:"";position:absolute;inset:-22px;z-index:-1}   /* görünmez ek dokunma payı */
+#grid{display:grid;background:#b88452;border-radius:14px;overflow:hidden;box-shadow:inset 0 0 0 3px #9c6b3c}
+.cell{position:relative;touch-action:none;background:radial-gradient(circle at 30% 25%,#d6a874 0,#c99863 55%,#bd8a56 100%);box-shadow:inset 0 0 0 2px rgba(120,76,36,.45),inset 0 0 14px rgba(110,70,30,.25);cursor:pointer}
+.cell svg{position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+.cell .pipe{transition:transform .22s cubic-bezier(.3,1.5,.5,1)}
+.cell.pop{animation:pop .22s}
+@keyframes pop{0%{transform:scale(.93)}100%{transform:scale(1)}}
+.po{fill:none;stroke:#2f8f1f;stroke-width:32;stroke-linecap:butt;transition:stroke .3s}
+.pb{fill:none;stroke:#5ad13a;stroke-width:24;stroke-linecap:butt;transition:stroke .3s}
+.ph{fill:none;stroke:#b4f79a;stroke-width:5;stroke-linecap:butt;opacity:.75;transition:stroke .3s}
+.fl{fill:#5ad13a;stroke:#2f8f1f;stroke-width:3;transition:fill .3s,stroke .3s}
+.jt{fill:#5ad13a;stroke:#2f8f1f;stroke-width:3;transition:fill .3s,stroke .3s}
+.wet .po,#plumb .po{stroke:#1d6fc4}
+.wet .pb,#plumb .pb{stroke:#3aa7f5}
+.wet .ph,#plumb .ph{stroke:#bfe7ff}
+.wet .fl,.wet .jt,#plumb .fl{fill:#3aa7f5;stroke:#1d6fc4}
+.wf{fill:none;stroke:#8fdcff;stroke-width:13;stroke-linecap:round;stroke-dasharray:100 100;stroke-dashoffset:100}
+.wf.go{transition:stroke-dashoffset var(--d,.25s) linear;stroke-dashoffset:0}
+.ws{fill:none;stroke:#fff;stroke-width:3.5;stroke-linecap:round;stroke-dasharray:6 12;opacity:.85;animation:shim .5s linear infinite}
+@keyframes shim{to{stroke-dashoffset:-18}}
+.cell.hint{animation:hintG .6s ease-in-out 3}
+@keyframes hintG{0%,100%{box-shadow:inset 0 0 0 2px rgba(120,76,36,.45)}50%{box-shadow:inset 0 0 0 6px #ffe14d,0 0 22px 6px #fff27a}}
+.deco{opacity:.9}
+#faucet .spin{transform-box:fill-box;transform-origin:center}
+#faucet.open .spin{animation:turn .7s ease-in-out 2}
+@keyframes turn{0%{transform:scaleX(1)}50%{transform:scaleX(-1)}100%{transform:scaleX(1)}}
+#faucet .fHap{display:none}#faucet.open .fHap{display:inline}#faucet.open .fNorm{display:none}
+.drip{animation:drip 1.6s ease-in infinite;transform-box:fill-box}
+.drip.d2{animation-delay:.8s}
+@keyframes drip{0%{transform:translateY(0);opacity:0}15%{opacity:1}80%{opacity:1}100%{transform:translateY(46px);opacity:0}}
+#plumb.flowing .drip{display:none}
+
+#tub{position:absolute;left:0;top:0;width:330px;height:330px;z-index:3;overflow:visible;pointer-events:none}
+/* Küvet + panda: her hareketli parça AYRI katman (HTML öğesi) olarak çizilir ve yalnızca
+   transform ile canlandırılır → GPU'da birleştirilir, her karede SVG yeniden çizilmez. */
+#tub .ly{position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+#tub .wrap{will-change:transform;backface-visibility:hidden}
+#tub .earL,#tub .earR{transform-box:fill-box;transform-origin:center;transition:transform .4s}
+#tub.sad .earL{transform:rotate(-28deg) translate(-3px,9px)}
+#tub.sad .earR{transform:rotate(28deg) translate(3px,9px)}
+#tub .hapF,#tub .armUp{display:none}
+#tub.happy .hapF{display:inline}#tub.happy .armUp{display:block}
+#tub.happy .sadF,#tub.happy .armsDown{display:none}
+#tub .swayW{transform-origin:57.58% 60.61%}
+#tub.sad .swayW{animation:sway 2.4s ease-in-out infinite}
+@keyframes sway{0%,100%{transform:rotate(-2deg)}50%{transform:rotate(2deg)}}
+#tub.happy .jumpW{animation:jump .62s cubic-bezier(.3,.7,.4,1) infinite}
+@keyframes jump{0%,100%{transform:translate3d(0,0,0)}45%{transform:translate3d(0,-13.94%,0)}}
+#tub .armL{transform-origin:39.7% 60%}#tub .armR{transform-origin:75.45% 60%}
+#tub.happy .armL{animation:clapL .31s ease-in-out infinite alternate}
+#tub.happy .armR{animation:clapR .31s ease-in-out infinite alternate}
+@keyframes clapL{from{transform:rotate(18deg)}to{transform:rotate(60deg)}}
+@keyframes clapR{from{transform:rotate(-18deg)}to{transform:rotate(-60deg)}}
+#tub .waterW{transform-origin:48.48% 70.3%;transform:scale(.15,.1);opacity:0;transition:transform 1.3s ease-out,opacity .4s}
+#tub.full .waterW{transform:scale(1,1);opacity:1}
+#tub .sloshL{transform-origin:48.48% 64.24%}
+#tub.full .sloshL{animation:slosh 1.2s ease-in-out infinite}
+@keyframes slosh{0%,100%{transform:rotate(-1.5deg)}50%{transform:rotate(1.5deg)}}
+#stream{transition:height .3s linear}
+#tub .duckW{transform:translate3d(90.3%,97.58%,0);transition:transform 1s cubic-bezier(.4,1.6,.6,1)}
+#tub.full .duckW{transform:translate3d(78.18%,64.85%,0)}
+#tub .bobL{transform-origin:0 0}
+#tub.full .bobL{animation:bob 1s ease-in-out infinite}
+@keyframes bob{0%,100%{transform:translateY(0) rotate(-6deg)}50%{transform:translateY(-1.5%) rotate(6deg)}}
+.bub{animation:rise var(--t,1.6s) ease-out forwards}
+@keyframes rise{0%{transform:translate(0,0) scale(.3);opacity:0}15%{opacity:1}100%{transform:translate(var(--dx),var(--dy)) scale(1);opacity:0}}
+.foam{transform-box:fill-box;transform-origin:center;animation:popin .5s cubic-bezier(.3,1.7,.5,1) both}
+@keyframes popin{from{transform:scale(0)}to{transform:scale(1)}}
+
+/* Oyun ekranı tüm sahneyi kullanır (ızgara, vana ve küvet ekran boyutuna göre yerleşir) */
+#scrGame{left:0;top:0;margin:0;width:100%;height:100%}
+#topbar{position:absolute;left:0;top:0;width:100%;height:96px;z-index:5;pointer-events:none}
+#topbar .btn{position:absolute;pointer-events:auto}
+#btnHint{left:calc(18px + var(--safeL));top:12px;height:68px;font-size:28px;padding:0 22px 0 14px}
+#btnGMenu{right:calc(102px + var(--safeR));top:12px;height:68px;font-size:28px}
+#btnGSound{right:calc(18px + var(--safeR));top:12px;width:68px;height:68px}
+#lvTitle{position:absolute;left:50%;margin-left:-212px;width:424px;top:8px;text-align:center;font-size:54px;font-weight:900;line-height:76px;letter-spacing:1px;pointer-events:none}
+#hand{position:absolute;z-index:6;width:70px;height:80px;pointer-events:none;display:none;animation:tapHand 1s ease-in-out infinite}
+@keyframes tapHand{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(-6px,-10px) scale(1.08)}}
+#confettiCv{position:fixed;left:0;top:0;width:100vw;height:100vh;pointer-events:none;z-index:150}
+#scrGame.still .ws{animation-play-state:paused}   /* zafer anında su parıltısı durur → konfetiyle çakışmaz */
+.star{position:absolute;font-size:30px;animation:sparkle 1s ease-out forwards}
+@keyframes sparkle{from{transform:scale(0) rotate(0);opacity:1}to{transform:scale(1.4) rotate(160deg) translate(var(--dx),var(--dy));opacity:0}}
+
+/* ---------- SPLASH ---------- */
+/* ---------- Splash (Panda Games Studio standard) ---------- */
+:root{--u:min(1vh,0.56vw)}
+#splash{position:fixed;inset:0;z-index:100;background:radial-gradient(ellipse at 50% 40%,#d6f1fd 0%,#b9e6fa 45%,#9fdcf7 100%);transition:opacity .5s}
+#splash.hide{opacity:0;pointer-events:none}
+#splash .wrap{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+#splash .logoBox{width:calc(var(--u)*62);height:calc(var(--u)*46);animation:spop 1s cubic-bezier(.2,1.6,.4,1) both}
+#splash .logo{width:100%;height:100%;overflow:visible}
+#splash .head{transform-origin:150px 190px;animation:ssway 2.2s 1s ease-in-out infinite}
+@keyframes ssway{0%,100%{transform:rotate(-5deg)}50%{transform:rotate(5deg)}}
+#splash .spark{transform-box:fill-box;transform-origin:center;animation:twinkle 1.6s ease-in-out infinite}
+#splash .spark:nth-of-type(2){animation-delay:.4s}#splash .spark:nth-of-type(3){animation-delay:.8s}#splash .spark:nth-of-type(4){animation-delay:1.2s}
+@keyframes twinkle{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(.55);opacity:.55}}
+#splash .brand{margin-top:calc(var(--u)*4);font-family:"Roboto","Arial Black","Segoe UI",Arial,sans-serif;font-size:calc(var(--u)*8.5);font-weight:900;color:#fff;letter-spacing:.01em;
+ -webkit-text-stroke:calc(var(--u)*1.1) #3d2f7c;paint-order:stroke fill;text-shadow:0 calc(var(--u)*.7) 0 #3d2f7c;animation:srise .8s .5s both;white-space:nowrap}
+@keyframes spop{0%{transform:scale(0) rotate(-20deg)}100%{transform:scale(1) rotate(0)}}
+@keyframes srise{0%{opacity:0;transform:translateY(30px)}100%{opacity:1;transform:none}}
+#splash .blink{animation:sblink 3s 1.2s infinite}
+@keyframes sblink{0%,92%,100%{transform:scaleY(1)}95%{transform:scaleY(.1)}}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
+
+/* ---------- MENU ---------- */
+#menuTitle{position:absolute;pointer-events:none;left:0;right:0;top:34px;text-align:center;font-size:80px;font-weight:900;line-height:90px}
+#menuSub{position:absolute;pointer-events:none;left:0;right:0;top:124px;text-align:center;font-size:26px;font-weight:900;color:#2b7fd0;letter-spacing:2px;text-shadow:0 2px 0 #fff}
+#menuPanda{position:absolute;left:70px;top:230px;animation:float 2s ease-in-out infinite}
+#menuFaucet{position:absolute;right:58px;top:240px;animation:float 2.4s ease-in-out .4s infinite}
+#menuBtns{position:absolute;left:287px;top:200px;width:450px;display:flex;flex-direction:column;gap:16px}
+#menuBtns .btn{width:100%;height:78px;font-size:32px}
+#menuBtns .row{display:flex;gap:16px}
+#menuBtns .row .btn{font-size:20px;gap:6px;height:70px;padding:0 10px}
+#btnPlay{height:96px!important;font-size:44px!important;animation:breathe 1.6s ease-in-out infinite}
+@keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
+.studio{position:absolute;pointer-events:none;bottom:10px;width:100%;text-align:center;font-weight:900;color:#3d8a2a;font-size:18px;text-shadow:0 1px 0 #fff;opacity:.85}
+
+/* ---------- LEVELS ---------- */
+#lvHead{position:absolute;left:0;right:0;top:22px;text-align:center;font-size:58px;font-weight:900;pointer-events:none;z-index:1}
+#btnLvBack{position:absolute;left:calc(22px - var(--ox) + var(--safeL));top:calc(22px - var(--oy));z-index:5}
+#btnLvSound{position:absolute;right:calc(22px - var(--ox) + var(--safeR));top:calc(22px - var(--oy));z-index:5}
+#lvGrid{position:absolute;z-index:2;left:62px;top:122px;width:900px;display:grid;grid-template-columns:repeat(10,1fr);gap:14px}
+.lvb{height:96px;border-radius:22px;border:4px solid #fff;font-size:34px;font-weight:900;color:#fff;position:relative;box-shadow:0 6px 0 rgba(0,0,0,.15),inset 0 -5px 0 rgba(0,0,0,.12);text-shadow:0 2px 0 rgba(0,0,0,.2)}
+.lvb:active{transform:translateY(3px)}
+.lvb.t1{background:linear-gradient(#7fe05a,#3dbb2c)}.lvb.t2{background:linear-gradient(#6cc6ff,#2b96f0)}.lvb.t3{background:linear-gradient(#ffc04d,#ff8c1a)}.lvb.t4{background:linear-gradient(#ff9ccb,#ff5fa6)}.lvb.t5{background:linear-gradient(#c79bff,#9254f0)}
+.lvb.locked{background:linear-gradient(#d6dbe1,#a8b0ba)!important;color:#eef1f4}
+.lvb.pay{background:linear-gradient(#ffe08a,#ffc84a)!important;color:#fff}
+.lvb.cur{animation:breathe 1.4s ease-in-out infinite}
+.lvb.shake{animation:lvshake .45s}
+@keyframes lvshake{0%,100%{transform:none}20%{transform:translateX(-10px) rotate(-6deg)}40%{transform:translateX(8px) rotate(5deg)}60%{transform:translateX(-6px)}80%{transform:translateX(3px)}}
+.lvb .lk{position:absolute;right:-6px;top:-8px}
+.lvb .ok{position:absolute;right:-8px;top:-10px;width:32px;height:32px;border-radius:50%;background:#ffd93b;border:3px solid #fff;font-size:18px;line-height:26px;color:#c97a00;text-shadow:none}
+.lvLegend{position:absolute;pointer-events:none;left:0;right:0;bottom:20px;text-align:center;font-weight:900;color:#2e6e1d;font-size:20px;text-shadow:0 1px 0 #fff}
+
+/* ---------- OVERLAYS ---------- */
+.ov{position:absolute;inset:0;z-index:30;background:rgba(40,60,90,.45);display:none;align-items:center;justify-content:center}
+.ov.on{display:flex;animation:fadeIn .2s}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.card{background:#fff;border-radius:34px;border:6px solid #ffd2e8;padding:26px 34px;min-width:480px;max-width:760px;text-align:center;box-shadow:0 18px 40px rgba(0,0,0,.25);animation:cardIn .35s cubic-bezier(.3,1.6,.5,1);position:relative}
+@keyframes cardIn{from{transform:scale(.6)}to{transform:scale(1)}}
+.card h2{font-size:44px;font-weight:900;color:#ff5fa6;margin-bottom:8px}
+.card p{font-size:22px;color:#4a5a70;font-weight:700;line-height:1.4}
+.card .btns{display:flex;gap:14px;justify-content:center;margin-top:18px;flex-wrap:wrap}
+.card .btn{font-size:26px;height:72px}
+.x{position:absolute;right:-18px;top:-18px;width:60px;height:60px;border-radius:50%;border:4px solid #fff;background:linear-gradient(#ff9ccb,#ff5fa6);color:#fff;font-size:32px;font-weight:900;box-shadow:0 5px 0 rgba(0,0,0,.18);line-height:48px}
+.payList{list-style:none;text-align:left;margin:10px auto 6px;display:inline-block}
+.payList li{font-size:22px;font-weight:800;color:#3b4b63;margin:6px 0}
+.payList li b{color:#3dbb2c}
+#btnBuy{font-size:30px;height:84px;padding:0 30px;animation:breathe 1.6s ease-in-out infinite}
+.small{font-size:16px!important;color:#8090a5!important;margin-top:10px}
+#gateQ{font-size:58px;font-weight:900;color:#2b96f0;margin:6px 0}
+#gateIn{width:220px;height:68px;margin:0 auto 12px;border:4px solid #d7e6f5;border-radius:18px;font-size:44px;font-weight:900;color:#3b4b63;line-height:58px}
+#gateIn.err{animation:shake .4s;border-color:#ff6b6b}
+@keyframes shake{20%,60%{transform:translateX(-10px)}40%,80%{transform:translateX(10px)}}
+.keys{display:grid;grid-template-columns:repeat(3,96px);gap:10px;justify-content:center}
+.keys button{height:62px;border-radius:16px;border:3px solid #d7e6f5;background:#f4f9ff;font-size:32px;font-weight:900;color:#3b4b63}
+.keys button:active{background:#dceeff}
+.keys .ok{background:linear-gradient(#7fe05a,#3dbb2c);color:#fff;border-color:#fff}
+.privTxt{text-align:left;max-height:380px;overflow:auto;padding-right:8px;-webkit-user-select:text;user-select:text}
+.privTxt h3{font-size:22px;color:#2b96f0;margin:12px 0 4px}
+.privTxt p{font-size:18px}
+.howRow{display:flex;align-items:center;gap:18px;text-align:left;margin:12px 0}
+.howRow .num{flex:none;width:52px;height:52px;border-radius:50%;background:#ffc93d;color:#fff;font-size:30px;font-weight:900;line-height:52px;text-align:center;border:3px solid #fff;box-shadow:0 3px 0 rgba(0,0,0,.12)}
+#toast{position:absolute;left:50%;bottom:40px;transform:translateX(-50%) translateY(140px);background:#fff;color:#3b4b63;font-weight:900;font-size:24px;padding:14px 28px;border-radius:24px;border:4px solid #ffd2e8;z-index:60;transition:transform .35s cubic-bezier(.3,1.5,.5,1);box-shadow:0 10px 24px rgba(0,0,0,.18)}
+#toast.on{transform:translateX(-50%) translateY(0)}
+#rotateHint{position:fixed;inset:0;z-index:200;display:none;flex-direction:column;align-items:center;justify-content:center;gap:5vw;background:radial-gradient(ellipse at 50% 40%,#d6f1fd,#9fdcf7);font-weight:900;font-size:6vw;color:#3d2f7c;text-align:center;padding:8vw}
+#rotateHint svg{width:28vw;animation:rotPh 1.8s ease-in-out infinite}
+@keyframes rotPh{0%,30%{transform:rotate(0)}60%,100%{transform:rotate(-90deg)}}
+@media (orientation:portrait) and (max-width:900px){#rotateHint{display:flex}}
+</style>
+</head>
+<body>
+<div id="safeProbe"></div>
+<div id="rotateHint"><svg viewBox="0 0 100 100"><rect x="30" y="10" width="40" height="80" rx="8" fill="#fff" stroke="#3d2f7c" stroke-width="5"/><circle cx="50" cy="80" r="4" fill="#3d2f7c"/></svg>Lütfen cihazı yan çevir</div>
+<div id="stage">
+  <svg id="bg" width="1024" height="768" viewBox="0 0 1024 768" preserveAspectRatio="none"></svg>
+  <svg id="sunRays" viewBox="-70 -70 140 140"></svg>
+
+  <!-- ============ GAME SCREEN ============ -->
+  <div id="scrGame" class="screen">
+    <div id="board"><div id="grid"></div></div>
+    <svg id="plumb" width="1024" height="768" viewBox="0 0 1024 768"></svg>
+    <div id="tub" class="sad"></div>
+    <div id="topbar">
+      <button id="btnHint" class="btn orange"></button>
+      <div id="lvTitle" class="rainbow"></div>
+      <button id="btnGMenu" class="btn pink">Menü</button>
+      <button id="btnGSound" class="btn pink sq sndBtn"></button>
+    </div>
+    <svg id="hand" viewBox="0 0 70 80"></svg>
+  </div>
+
+  <!-- ============ MENU ============ -->
+  <div id="scrMenu" class="screen">
+    <div id="menuTitle" class="rainbow"></div>
+    <div id="menuSub">PANDA WATER PIPES</div>
+    <svg id="menuPanda" width="230" height="250" viewBox="-115 -125 230 250"></svg>
+    <svg id="menuFaucet" width="230" height="240" viewBox="-115 -120 230 240"></svg>
+    <div id="menuBtns">
+      <button id="btnPlay" class="btn green"></button>
+      <button id="btnLevels" class="btn blue"></button>
+      <button id="btnHow" class="btn purple"></button>
+      <div class="row">
+        <button id="btnMSound" class="btn orange sndBtn" style="flex:1.1"></button>
+        <button id="btnPriv" class="btn pink" style="flex:1"></button>
+      </div>
+    </div>
+    <div class="studio">© Panda Games Studio</div>
+  </div>
+
+  <!-- ============ LEVELS ============ -->
+  <div id="scrLevels" class="screen">
+    <button id="btnLvBack" class="btn pink sq"></button>
+    <div id="lvHead" class="rainbow"></div>
+    <button id="btnLvSound" class="btn pink sq sndBtn"></button>
+    <div id="lvGrid"></div>
+    <div class="lvLegend" id="lvLegend"></div>
+  </div>
+
+
+  <!-- ============ OVERLAYS ============ -->
+  <div id="ovWin" class="ov"><div class="card" style="border-color:#c9f0b5">
+    <svg id="winPanda" width="150" height="150" viewBox="-75 -78 150 150"></svg>
+    <h2 id="winTitle">Harika!</h2>
+    <p id="winText">Panda mis gibi banyo yaptı!</p>
+    <div class="btns">
+      <button id="btnWinLevels" class="btn pink"></button>
+      <button id="btnRetry" class="btn blue"></button>
+      <button id="btnNext" class="btn green"></button>
+    </div>
+  </div></div>
+
+  <div id="ovPay" class="ov"><div class="card">
+    <button class="x" data-close="ovPay">×</button>
+    <svg id="payPanda" width="120" height="120" viewBox="-75 -78 150 150"></svg>
+    <h2>Tüm Seviyeleri Aç</h2>
+    <ul class="payList">
+      <li><b>✔</b> Seviye 11'deki kilit kalkar, 40 yeni bulmaca (11-50)</li>
+      <li><b>✔</b> Seviyeler yine sırayla açılır: bitir, sonrakine geç</li>
+      <li><b>✔</b> Tek seferlik ödeme, abonelik yok</li>
+      <li><b>✔</b> Reklam yok, internet gerekmez</li>
+    </ul>
+    <div class="btns"><button id="btnBuy" class="btn green">Tüm Seviyeleri Aç - 24.99 TL</button></div>
+    <div class="btns" style="margin-top:10px"><button id="btnRestore" class="btn grey" style="font-size:20px;height:56px">Satın Alımı Geri Yükle</button></div>
+    <p class="small">Satın alma işlemi ebeveyn onayı gerektirir.</p>
+  </div></div>
+
+  <div id="ovGate" class="ov"><div class="card" style="border-color:#cfe6ff;min-width:420px">
+    <button class="x" data-close="ovGate">×</button>
+    <h2 style="color:#2b96f0">Ebeveyn Onayı</h2>
+    <p>Devam etmek için lütfen soruyu cevaplayın:</p>
+    <div id="gateQ">9 + 4 = ?</div>
+    <div id="gateIn"></div>
+    <div class="keys" id="keys"></div>
+  </div></div>
+
+  <div id="ovHow" class="ov"><div class="card" style="border-color:#e4d4ff">
+    <button class="x" data-close="ovHow">×</button>
+    <h2 style="color:#9254f0">Nasıl Oynanır?</h2>
+    <div class="howRow"><div class="num">1</div><svg width="90" height="90" viewBox="0 0 100 100" id="howPipe"></svg><p>Borulara <b>dokun</b>, her dokunuşta boru <b>döner</b>.</p></div>
+    <div class="howRow"><div class="num">2</div><svg width="90" height="90" viewBox="-60 -60 120 120" id="howFaucet"></svg><p>Vanadan küvete kadar <b>kesintisiz bir yol</b> yap. Bağlanan borular <b style="color:#2b96f0">maviye</b> döner.</p></div>
+    <div class="howRow"><div class="num">3</div><svg width="90" height="90" viewBox="-75 -78 150 150" id="howPanda"></svg><p>Su küvete ulaşınca <b>panda banyo yapar</b> ve çok mutlu olur! Takılırsan <b style="color:#ff8c1a">İpucu</b>'na bas.</p></div>
+    <div class="btns"><button class="btn green" data-close="ovHow">Anladım!</button></div>
+  </div></div>
+
+  <div id="ovPriv" class="ov"><div class="card" style="border-color:#cfe6ff;max-width:720px">
+    <button class="x" data-close="ovPriv">×</button>
+    <h2 style="color:#2b96f0">Gizlilik Politikası</h2>
+    <div class="privTxt">
+      <p><b>Kişisel veri toplanmaz, çocuk güvenliği önceliklidir.</b></p>
+      <h3>Çocuk güvenliği</h3>
+      <p>Panda Su Yolu, Panda Games Studio tarafından çocuklar için tasarlanmıştır. Uygulama, Google Play Aile Politikaları, COPPA, GDPR ve KVKK ilkelerine uygun şekilde hazırlanmıştır. Reklam, sohbet, sosyal paylaşım veya dış bağlantı içermez.</p>
+      <h3>Kişisel veriler</h3>
+      <p>Bu uygulama hiçbir kişisel veri toplamaz, kaydetmez veya işlemez. Konum, fotoğraf, ses kaydı, cihaz kimliği ya da reklam kimliği gibi bilgilere erişilmez. Oyun ilerlemesi ve müzik ayarı yalnızca cihazın kendi hafızasında tutulur ve hiçbir sunucuya gönderilmez.</p>
+      <h3>Üçüncü taraflar</h3>
+      <p>Hiçbir bilgi üçüncü taraflarla paylaşılmaz. Uygulamada analiz, takip veya reklam aracı bulunmaz. Uygulama içi satın alma ebeveyn onayı ile korunur ve ödeme işlemleri yalnızca Google Play tarafından yürütülür.</p>
+    </div>
+    <div class="btns"><button class="btn blue" data-close="ovPriv">Tamam</button></div>
+  </div></div>
+
+  <div id="toast"></div>
+
+</div>
+<!-- ============ SPLASH: Panda Games Studio (standart, 2 sn) ============ -->
+<div id="splash">
+  <div class="wrap">
+    <div class="logoBox"><svg class="logo" id="studioLogo" viewBox="-40 -10 380 280">
+      <defs><clipPath id="headClip"><ellipse cx="150" cy="150" rx="108" ry="94"/></clipPath></defs>
+      <path class="spark" d="M-2 58 Q2 72 16 76 Q2 80 -2 94 Q-6 80 -20 76 Q-6 72 -2 58Z" fill="#FFD43B"/>
+      <path class="spark" d="M318 24 Q321 35 332 38 Q321 41 318 52 Q315 41 304 38 Q315 35 318 24Z" fill="#FF6B8B"/>
+      <path class="spark" d="M326 148 Q329 159 340 162 Q329 165 326 176 Q323 165 312 162 Q323 159 326 148Z" fill="#5BB8F5"/>
+      <path class="spark" d="M-2 206 Q1 216 11 219 Q1 222 -2 232 Q-5 222 -15 219 Q-5 216 -2 206Z" fill="#9B7BF0"/>
+      <circle cx="30" cy="132" r="6" fill="#FF9A66"/><circle cx="292" cy="254" r="7" fill="#7FD3B8"/>
+      <g class="head">
+        <circle cx="78" cy="60" r="50" fill="#1f1d24"/><circle cx="222" cy="60" r="50" fill="#1f1d24"/>
+        <ellipse cx="150" cy="150" rx="108" ry="94" fill="#fff"/>
+        <g clip-path="url(#headClip)"><ellipse cx="150" cy="262" rx="150" ry="64" fill="#E4E0F5"/></g>
+        <ellipse cx="150" cy="150" rx="108" ry="94" fill="none" stroke="#1f1d24" stroke-width="11"/>
+        <ellipse cx="104" cy="140" rx="34" ry="38" fill="#1f1d24" transform="rotate(12 104 140)"/>
+        <ellipse cx="196" cy="140" rx="34" ry="38" fill="#1f1d24" transform="rotate(-12 196 140)"/>
+        <g class="blink" style="transform-origin:150px 142px">
+          <circle cx="110" cy="142" r="14" fill="#0d0c10"/><circle cx="190" cy="142" r="14" fill="#0d0c10"/>
+          <circle cx="104" cy="136" r="5.5" fill="#fff"/><circle cx="184" cy="136" r="5.5" fill="#fff"/>
+          <circle cx="114" cy="148" r="2.2" fill="#fff"/><circle cx="194" cy="148" r="2.2" fill="#fff"/>
+        </g>
+        <ellipse cx="78" cy="192" rx="26" ry="17" fill="#FFAFC0"/><ellipse cx="222" cy="192" rx="26" ry="17" fill="#FFAFC0"/>
+        <path d="M138 180 Q150 175 162 180 Q158 192 150 197 Q142 192 138 180Z" fill="#1f1d24" stroke="#1f1d24" stroke-width="3" stroke-linejoin="round"/>
+        <path d="M122 208 Q136 220 150 208 Q164 220 178 208" fill="none" stroke="#1f1d24" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+      </g>
+    </svg></div>
+    <div class="brand">PANDA GAMES STUDIO</div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* =====================================================================
+   PANDA SU YOLU (Panda Water Pipes) — Panda Games Studio
+   Tek dosya: SVG çizimler + Web Audio API + CSS/JS. Harici dosya yok.
+   ===================================================================== */
+
+/* ---------- 50 SEVİYE VERİSİ ----------
+   r,c : ızgara satır/sütun
+   p   : suyun izlediği doğru yol [hücre indeksi, gerekli açıklık bitleri] (vana -> küvet sırası)
+   g   : hücreler. "." = boş toprak. Aksi halde TİP + BAŞLANGIÇ_DÖNÜŞ + ÇÖZÜM_DÖNÜŞ
+         TİP: I = düz, L = dirsek, T = T-boru ; çözüm "x" ise sahte (yol dışı) borudur.
+   Su sol üst hücreye soldan girer, sağ ÜST hücreden sağa çıkar ve inen borudan küvete akar.
+   Seviye 1: 1x2 · Seviye 2-4: 2x2 · 5-10: 3x3 (2-3 boru yanlış) · 11-20: 3x3 + 1 sahte boru
+   21-30: 3x3, 7 borulu kıvrımlı yol + T-borular · 31-40: 3x4 + 2-3 sahte boru
+   41-50: 3x4, tüm hücreler dolu, tam bulmaca */
+const LEVELS = [{"r":1,"c":2,"p":[[0,10],[1,10]],"g":["I21","I21"]},{"r":2,"c":2,"p":[[0,12],[2,3],[3,9],[1,6]],"g":["L22","L01","L00","L03"]},{"r":2,"c":2,"p":[[0,12],[2,3],[3,9],[1,6]],"g":["L12","L31","L20","L33"]},{"r":2,"c":2,"p":[[0,12],[2,3],[3,9],[1,6]],"g":["L02","L11","L20","L03"]},{"r":3,"c":3,"p":[[0,12],[3,3],[4,9],[1,6],[2,10]],"g":["L22","L21","I11","L00","L13",".",".",".","."]},{"r":3,"c":3,"p":[[0,12],[3,3],[4,10],[5,9],[2,6]],"g":["L22",".","L11","L00","I01","L13",".",".","."]},{"r":3,"c":3,"p":[[0,12],[3,3],[4,9],[1,6],[2,10]],"g":["L02","L11","I11","L20","L33",".",".",".","."]},{"r":3,"c":3,"p":[[0,12],[3,3],[4,10],[5,9],[2,6]],"g":["L22",".","L11","L20","I21","L13",".",".","."]},{"r":3,"c":3,"p":[[0,12],[3,3],[4,9],[1,6],[2,10]],"g":["L02","L11","I11","L30","L13",".",".",".","."]},{"r":3,"c":3,"p":[[0,12],[3,3],[4,10],[5,9],[2,6]],"g":["L12",".","L11","L30","I11","L13",".",".","."]},{"r":3,"c":3,"p":[[0,10],[1,12],[4,3],[5,9],[2,6]],"g":["I21","L02","L21","I1x","L10","L23",".",".","."]},{"r":3,"c":3,"p":[[0,12],[3,3],[4,9],[1,6],[2,10]],"g":["L32","L21","I01","L30","L23",".",".","I2x","."]},{"r":3,"c":3,"p":[[0,12],[3,3],[4,9],[1,6],[2,10]],"g":["L12","L21","I01","L20","L13",".",".",".","L3x"]},{"r":3,"c":3,"p":[[0,12],[3,3],[4,9],[1,6],[2,10]],"g":["L02","L21","I21","L20","L03",".",".","L2x","."]},{"r":3,"c":3,"p":[[0,10],[1,12],[4,3],[5,9],[2,6]],"g":["I21","L12","L01",".","L20","L03",".",".","I1x"]},{"r":3,"c":3,"p":[[0,12],[3,3],[4,9],[1,6],[2,10]],"g":["L32","L31","I21","L10","L23",".",".",".","L2x"]},{"r":3,"c":3,"p":[[0,10],[1,12],[4,3],[5,9],[2,6]],"g":["I01","L02","L21","I1x","L20","L23",".",".","."]},{"r":3,"c":3,"p":[[0,12],[3,3],[4,9],[1,6],[2,10]],"g":["L32","L01","I21","L10","L13",".",".",".","L2x"]},{"r":3,"c":3,"p":[[0,12],[3,3],[4,9],[1,6],[2,10]],"g":["L12","L31","I21","L20","L23","I3x",".",".","."]},{"r":3,"c":3,"p":[[0,10],[1,12],[4,3],[5,9],[2,6]],"g":["I21","L02","L01",".","L10","L23",".",".","I1x"]},{"r":3,"c":3,"p":[[0,12],[3,5],[6,3],[7,10],[8,9],[5,5],[2,6]],"g":["L12",".","L31","I30","L0x","I10","L20","T32","L13"]},{"r":3,"c":3,"p":[[0,12],[3,5],[6,3],[7,9],[4,6],[5,9],[2,6]],"g":["L02","L1x","L21","I10","L31","T01","L20","L23","."]},{"r":3,"c":3,"p":[[0,10],[1,12],[4,5],[7,3],[8,9],[5,5],[2,6]],"g":["I01","L02","L21",".","I30","T01","L1x","L30","L13"]},{"r":3,"c":3,"p":[[0,10],[1,12],[4,5],[7,3],[8,9],[5,5],[2,6]],"g":["I01","T21","L21",".","I30","I10","I0x","L10","L13"]},{"r":3,"c":3,"p":[[0,12],[3,3],[4,12],[7,3],[8,9],[5,5],[2,6]],"g":["L12","I1x","L01","L30","L12","I10",".","T12","L03"]},{"r":3,"c":3,"p":[[0,12],[3,5],[6,3],[7,9],[4,6],[5,9],[2,6]],"g":["L32",".","L31","I10","T23","T02","L10","L13","L3x"]},{"r":3,"c":3,"p":[[0,10],[1,12],[4,5],[7,3],[8,9],[5,5],[2,6]],"g":["I21","T30","L31","I1x","T21","I30",".","L30","L23"]},{"r":3,"c":3,"p":[[0,12],[3,5],[6,3],[7,10],[8,9],[5,5],[2,6]],"g":["L32","L2x","L01","T01",".","T03","L20","I01","L23"]},{"r":3,"c":3,"p":[[0,10],[1,12],[4,5],[7,3],[8,9],[5,5],[2,6]],"g":["I01","T31","L21",".","T03","I10","I2x","L20","L23"]},{"r":3,"c":3,"p":[[0,12],[3,3],[4,12],[7,3],[8,9],[5,5],[2,6]],"g":["L02",".","L21","L20","L32","I30","I3x","T02","T01"]},{"r":3,"c":4,"p":[[0,12],[4,3],[5,9],[1,6],[2,10],[3,10]],"g":["L12","T23","T10","I01","L20","L13","I2x","I2x",".",".",".","."]},{"r":3,"c":4,"p":[[0,10],[1,12],[5,3],[6,10],[7,9],[3,6]],"g":["I01","L02","I1x","L31",".","T12","T30","L03",".","I2x",".","."]},{"r":3,"c":4,"p":[[0,10],[1,12],[5,3],[6,10],[7,9],[3,6]],"g":["I01","L02","T3x","L01",".","T12","I21","T32","I1x",".",".","."]},{"r":3,"c":4,"p":[[0,10],[1,12],[5,3],[6,9],[2,6],[3,10]],"g":["I01","T31","T10","I01","L1x","L10","L13",".",".",".",".","L3x"]},{"r":3,"c":4,"p":[[0,12],[4,3],[5,10],[6,9],[2,6],[3,10]],"g":["L32",".","L31","I01","T02","T32","L03","I0x","L3x",".",".","."]},{"r":3,"c":4,"p":[[0,10],[1,12],[5,5],[9,3],[10,10],[11,9],[7,5],[3,6]],"g":["I21","L32","I0x","L01","T1x","T03",".","I30","L1x","L10","T10","L23"]},{"r":3,"c":4,"p":[[0,12],[4,3],[5,10],[6,12],[10,3],[11,9],[7,5],[3,6]],"g":["L02","T2x",".","L31","L20","I01","T30","I10","L3x","I1x","T12","L23"]},{"r":3,"c":4,"p":[[0,10],[1,12],[5,5],[9,3],[10,10],[11,9],[7,5],[3,6]],"g":["I21","T30","L3x","L21",".","I10","I1x","I30","T0x","L20","I01","T01"]},{"r":3,"c":4,"p":[[0,10],[1,10],[2,12],[6,5],[10,3],[11,9],[7,5],[3,6]],"g":["I01","T10","T30","L31","L2x","I1x","I30","I30",".","L3x","L10","L03"]},{"r":3,"c":4,"p":[[0,12],[4,3],[5,10],[6,12],[10,3],[11,9],[7,5],[3,6]],"g":["L02",".","I3x","L21","L10","I01","T21","I10","I2x","L0x","T03","L03"]},{"r":3,"c":4,"p":[[0,12],[4,5],[8,3],[9,9],[5,6],[6,9],[2,6],[3,10]],"g":["L32","L1x","T10","I01","T21","L01","L23","T3x","L30","L13","L2x","I2x"]},{"r":3,"c":4,"p":[[0,12],[4,3],[5,10],[6,12],[10,3],[11,9],[7,5],[3,6]],"g":["L32","T3x","I0x","L31","L10","I21","L32","T01","L0x","I3x","T03","L13"]},{"r":3,"c":4,"p":[[0,10],[1,12],[5,5],[9,3],[10,10],[11,9],[7,5],[3,6]],"g":["I21","T31","L2x","L31","L1x","T21","T3x","I30","I0x","L30","I01","L13"]},{"r":3,"c":4,"p":[[0,12],[4,5],[8,3],[9,9],[5,5],[1,6],[2,10],[3,10]],"g":["L02","L31","I01","I21","T23","I30","L1x","T1x","T13","L23","I0x","T1x"]},{"r":3,"c":4,"p":[[0,12],[4,5],[8,3],[9,10],[10,9],[6,5],[2,6],[3,10]],"g":["L12","L0x","L01","I21","T23","I1x","I10","L1x","T12","I21","L03","I2x"]},{"r":3,"c":4,"p":[[0,12],[4,5],[8,3],[9,9],[5,6],[6,10],[7,9],[3,6]],"g":["L02","I3x","L1x","L21","I10","T10","T30","T01","L30","L23","T3x","T3x"]},{"r":3,"c":4,"p":[[0,12],[4,3],[5,12],[9,3],[10,10],[11,9],[7,5],[3,6]],"g":["L32","T1x","I3x","L01","T02","L32","L0x","I30","T3x","L30","T32","T31"]},{"r":3,"c":4,"p":[[0,10],[1,12],[5,9],[4,6],[8,3],[9,10],[10,9],[6,6],[7,9],[3,6]],"g":["I01","L02","T0x","L31","L31","L03","T10","L13","T03","I21","T02","T3x"]},{"r":3,"c":4,"p":[[0,10],[1,12],[5,5],[9,3],[10,9],[6,6],[7,9],[3,6]],"g":["I21","L32","T0x","L21","T2x","I30","T20","T01","I2x","T03","L03","L0x"]},{"r":3,"c":4,"p":[[0,12],[4,3],[5,9],[1,6],[2,12],[6,5],[10,3],[11,9],[7,5],[3,6]],"g":["L02","T20","L32","L21","L30","T02","I30","T23","I1x","T2x","L20","L23"]}];
+
+const FREE_LEVELS = 10, TOTAL = 50, PRICE = "24.99 TL", SKU = "unlock_all_levels";
+const N=1,E=2,S=4,W=8;
+const DR=[-1,0,1,0], DC=[0,1,0,-1];             // side index 0=N 1=E 2=S 3=W
+const BASE={I:N|S, L:N|E, T:E|S|W};
+const OPEN={I:[0,2], L:[0,1], T:[1,2,3]};
+const rot1=m=>((m<<1)|(m>>3))&15;
+function maskOf(t,r){let m=BASE[t];for(let i=0;i<r;i++)m=rot1(m);return m;}
+const $=id=>document.getElementById(id);
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+
+/* ---------- KAYIT (LocalStorage) ---------- */
+const STORE="pandaSuYolu";
+/* save.maxUnlocked : ilerleme zincirinde ulaşılan en yüksek seviye (başlangıçta SADECE 1).
+   Seviye n bitince maxUnlocked = n+1 olur. Satın alma bu değeri ASLA değiştirmez;
+   yalnızca Seviye 11'deki ödeme duvarını (purchased) kaldırır. */
+let save=(()=>{let s={};try{s=JSON.parse(localStorage.getItem(STORE)||"{}")||{};}catch(e){}
+  const done=(s.done&&typeof s.done==="object")?s.done:{};
+  let chain=1;while(chain<TOTAL&&done[chain])chain++;           // eski kayıtlar: ardışık bitenlerden hesapla
+  let mu=Number.isInteger(s.maxUnlocked)?s.maxUnlocked:chain;
+  mu=Math.max(1,Math.min(TOTAL,Math.min(mu,chain)));
+  return{purchased:s.purchased===true,done,maxUnlocked:mu,music:(s.music!==undefined?s.music:s.sound)!==false};})();
+function persist(){try{localStorage.setItem(STORE,JSON.stringify(save));}catch(e){}}
+const payLocked=lv=>lv>FREE_LEVELS&&!save.purchased;      // 11+ ödeme duvarı
+const progLocked=lv=>lv>save.maxUnlocked;                 // önceki seviye bitmedi
+const unlocked=lv=>!progLocked(lv)&&!payLocked(lv);
+
+/* ---------- SAHNE ÖLÇEKLEME ---------- */
+/* Ekran boyutu: tasarım alanı 1024x768, ölçek s = min(W/1024, H/768).
+   Sahne ekranın tamamını kaplayacak kadar genişletilir (SW x SH), oyun alanı tam ortada kalır. */
+const VIEW={s:1,SW:1024,SH:768,ox:0,oy:0};
+function fit(){
+  const de=document.documentElement;
+  const W=Math.max(1,de.clientWidth||innerWidth),H=Math.max(1,de.clientHeight||innerHeight);
+  const s=Math.min(W/1024,H/768);
+  const SW=W/s,SH=H/s,ox=(SW-1024)/2,oy=(SH-768)/2;
+  const st=$("stage");
+  st.style.width=SW+"px";st.style.height=SH+"px";
+  st.style.transform=`scale(${s})`;
+  st.style.setProperty("--ox",ox+"px");st.style.setProperty("--oy",oy+"px");st.style.setProperty("--sh",SH+"px");
+  const pc=getComputedStyle($("safeProbe"));                    // çentik / kamera boşluğu
+  st.style.setProperty("--safeL",(parseFloat(pc.paddingLeft)||0)/s+"px");
+  st.style.setProperty("--safeR",(parseFloat(pc.paddingRight)||0)/s+"px");
+  const changed=Math.abs(SW-VIEW.SW)>.5||Math.abs(SH-VIEW.SH)>.5;
+  Object.assign(VIEW,{s,SW,SH,ox,oy});
+  if(changed&&typeof drawBg==="function"&&$("bg").childNodes.length)drawBg();
+  if(changed){try{if(G.cells.length&&!G.busy&&$("scrGame").classList.contains("on"))layoutGame();}catch(e){}}   // G henüz tanımlı değilse atla
+}
+let fitT=0;const fitSoon=()=>{fit();clearTimeout(fitT);fitT=setTimeout(fit,250);};
+addEventListener("resize",fitSoon);addEventListener("orientationchange",fitSoon);
+if(window.visualViewport)visualViewport.addEventListener("resize",fitSoon);
+document.addEventListener("fullscreenchange",fitSoon);
+fit();
+
+/* =====================================================================
+   SES: Web Audio API (müzik + efektler)
+   ===================================================================== */
+const MUSIC_VOL=.15;
+const AU={ctx:null,master:null,music:null,sfx:null,noise:null,step:0,next:0,timer:null};
+function initAudio(){
+  if(!AU.ctx){
+    const AC=window.AudioContext||window.webkitAudioContext; if(!AC)return;
+    const c=AU.ctx=new AC();
+    AU.master=c.createGain();AU.master.gain.value=1;AU.master.connect(c.destination);
+    AU.music=c.createGain();AU.music.gain.value=save.music?MUSIC_VOL:0;AU.music.connect(AU.master);   // buton SADECE bunu kısar
+    AU.sfx=c.createGain();AU.sfx.gain.value=.9;AU.sfx.connect(AU.master);
+    const len=c.sampleRate*2,b=c.createBuffer(1,len,c.sampleRate),d=b.getChannelData(0);
+    for(let i=0;i<len;i++)d[i]=Math.random()*2-1; AU.noise=b;
+    AU.next=c.currentTime+.15; AU.timer=setInterval(scheduleMusic,30);
+  }
+  if(AU.ctx.state==="suspended"&&!document.hidden)AU.ctx.resume();
+}
+document.addEventListener("pointerdown",initAudio,true);
+document.addEventListener("visibilitychange",()=>{if(!AU.ctx)return;if(document.hidden)AU.ctx.suspend();else AU.ctx.resume();});
+const mf=n=>440*Math.pow(2,(n-69)/12);
+function tone(f,t,dur,type,vol,dest,glide){const c=AU.ctx,o=c.createOscillator(),g=c.createGain();
+  o.type=type;o.frequency.setValueAtTime(f,t);if(glide)o.frequency.exponentialRampToValueAtTime(glide,t+dur);
+  g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(vol,t+.012);g.gain.exponentialRampToValueAtTime(.0001,t+dur);
+  o.connect(g);g.connect(dest||AU.sfx);o.start(t);o.stop(t+dur+.05);}
+function noiseHit(t,dur,vol,type,freq,q,dest){const c=AU.ctx,s=c.createBufferSource(),f=c.createBiquadFilter(),g=c.createGain();
+  s.buffer=AU.noise;f.type=type;f.frequency.value=freq;f.Q.value=q||1;
+  g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(.0001,t+dur);
+  s.connect(f);f.connect(g);g.connect(dest||AU.sfx);s.start(t,Math.random()*1.5);s.stop(t+dur+.02);}
+/* Neşeli okul öncesi fon müziği: C - F - G - C, 32 adımlık döngü */
+const MEL=[67,0,72,0,76,74,72,0, 69,0,72,0,74,72,69,0, 67,0,71,0,74,72,71,0, 72,0,76,0,79,0,72,0];
+const MEL2=[76,0,79,0,84,0,79,0, 77,0,81,0,79,77,74,0, 74,0,77,0,79,77,74,0, 72,74,76,74,72,0,0,0];
+const ROOT=[48,53,55,48];
+function scheduleMusic(){
+  const c=AU.ctx;if(!c||c.state!=="running")return;
+  const spb=.23;
+  if(!save.music){AU.next=c.currentTime+.05;return;}   // müzik kapalıyken nota planlanmaz
+  if(AU.next<c.currentTime-.3)AU.next=c.currentTime+.05;
+  while(AU.next<c.currentTime+.15){
+    const t=AU.next,s=AU.step%64,i=s%32,bar=Math.floor(i/8);
+    const n=(s<32?MEL:MEL2)[i];
+    if(n){tone(mf(n),t,.26,"triangle",.5,AU.music);tone(mf(n+12),t,.12,"sine",.08,AU.music);}
+    if(i%2===0){const r=ROOT[bar]+((i%4)===2?7:0);tone(mf(r),t,.2,"sine",.55,AU.music);}
+    if(i%8===0)tone(mf(ROOT[bar]+24),t,.5,"sine",.12,AU.music);
+    if(i%2===1)noiseHit(t,.05,.08,"highpass",6000,.7,AU.music);
+    AU.next+=spb;AU.step++;
+  }
+}
+const ready=()=>AU.ctx&&AU.ctx.state==="running";
+const SFX={
+  tik(){if(!ready())return;const t=AU.ctx.currentTime;tone(1500,t,.045,"square",.12,null,700);noiseHit(t,.03,.35,"bandpass",3500,3);tone(420,t+.01,.06,"sine",.18,null,300);},
+  ui(){if(!ready())return;const t=AU.ctx.currentTime;tone(660,t,.08,"sine",.25,null,990);},
+  valve(){if(!ready())return;const t=AU.ctx.currentTime;tone(380,t,.35,"sawtooth",.05,null,760);tone(520,t+.05,.3,"sine",.2,null,1040);noiseHit(t,.25,.12,"bandpass",1800,4);},
+  water(){ // gurgle: filtreli gürültü + rastgele baloncuk "blup"ları
+    if(!ready())return()=>{};
+    const c=AU.ctx,t=c.currentTime,src=c.createBufferSource();src.buffer=AU.noise;src.loop=true;
+    const bp=c.createBiquadFilter();bp.type="bandpass";bp.frequency.value=650;bp.Q.value=2.2;
+    const lfo=c.createOscillator();lfo.frequency.value=6.5;const lg=c.createGain();lg.gain.value=320;lfo.connect(lg);lg.connect(bp.frequency);
+    const lp=c.createBiquadFilter();lp.type="lowpass";lp.frequency.value=1600;
+    const g=c.createGain();g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(.32,t+.35);
+    src.connect(bp);bp.connect(lp);lp.connect(g);g.connect(AU.sfx);src.start(t);lfo.start(t);
+    const iv=setInterval(()=>{if(!ready())return;const tt=c.currentTime,f=180+Math.random()*320;tone(f,tt,.07+Math.random()*.07,"sine",.1+Math.random()*.12,null,f*(2+Math.random()));},65);
+    return()=>{clearInterval(iv);const tt=c.currentTime;g.gain.cancelScheduledValues(tt);g.gain.setValueAtTime(g.gain.value||.2,tt);g.gain.exponentialRampToValueAtTime(.0001,tt+.5);src.stop(tt+.55);lfo.stop(tt+.55);};
+  },
+  splash(){if(!ready())return;const t=AU.ctx.currentTime;noiseHit(t,.7,.5,"lowpass",1400,.8);for(let i=0;i<6;i++){const f=300+Math.random()*500;tone(f,t+i*.06,.1,"sine",.18,null,f*2.2);}},
+  clap(){if(!ready())return;const t=AU.ctx.currentTime;noiseHit(t,.09,.5,"bandpass",1400,1.2);noiseHit(t+.012,.07,.35,"bandpass",2400,1.5);},
+  win(){if(!ready())return;const t=AU.ctx.currentTime;[72,76,79,84,79,84,88].forEach((n,i)=>{tone(mf(n),t+i*.12,.28,"triangle",.32);tone(mf(n+12),t+i*.12,.14,"sine",.08);});
+    [72,76,79,84].forEach(n=>tone(mf(n),t+.9,1.1,"triangle",.15));},
+  hint(){if(!ready())return;const t=AU.ctx.currentTime;[88,91,96].forEach((n,i)=>tone(mf(n),t+i*.08,.25,"sine",.18));},
+  lock(){if(!ready())return;const t=AU.ctx.currentTime;tone(220,t,.15,"square",.08,null,180);tone(180,t+.14,.2,"square",.08,null,140);},
+  pop(){if(!ready())return;const t=AU.ctx.currentTime;tone(500+Math.random()*400,t,.08,"sine",.2,null,1400);}
+};
+/* Müzik butonu: YALNIZCA arka plan müziğini açar/kapatır. Tık, su, zafer vb. efektler her zaman çalar. */
+function setMusic(on){save.music=on;persist();
+  if(AU.music){const t=AU.ctx.currentTime;AU.music.gain.cancelScheduledValues(t);AU.music.gain.setTargetAtTime(on?MUSIC_VOL:0,t,.05);}
+  updSoundBtns();}
+const ICON_SND_ON=`<svg width="40" height="40" viewBox="0 0 40 40"><path d="M14 30V9l18-4v21" stroke="#fff" stroke-width="4" fill="none" stroke-linejoin="round"/><ellipse cx="10" cy="30" rx="6" ry="5" fill="#fff"/><ellipse cx="28" cy="26" rx="6" ry="5" fill="#fff"/></svg>`;
+const ICON_SND_OFF=`<svg width="40" height="40" viewBox="0 0 40 40"><path d="M14 30V9l18-4v21" stroke="#fff" stroke-width="4" fill="none" stroke-linejoin="round"/><ellipse cx="10" cy="30" rx="6" ry="5" fill="#fff"/><ellipse cx="28" cy="26" rx="6" ry="5" fill="#fff"/><path d="M4 4L36 36" stroke="#ff4d6d" stroke-width="5" stroke-linecap="round"/></svg>`;
+function updSoundBtns(){document.querySelectorAll(".sndBtn").forEach(b=>{
+  if(b.id==="btnMSound")b.innerHTML=(save.music?ICON_SND_ON:ICON_SND_OFF)+(save.music?"Müzik Açık":"Müzik Kapalı");
+  else b.innerHTML=save.music?ICON_SND_ON:ICON_SND_OFF;
+  b.setAttribute("aria-label",save.music?"Müziği kapat":"Müziği aç");
+  b.style.background=save.music?"":"linear-gradient(#c9cfd6,#9aa3ad)";});}
+
+/* =====================================================================
+   ÇİZİMLER (saf SVG)
+   ===================================================================== */
+const RB=["#ff5a5a","#ff9f1a","#f7c600","#3dbb2c","#2b96f0","#9254f0","#ff5fa6"];
+const rainbow=(s,o=0)=>[...s].map((ch,i)=>ch===" "?"<span>&nbsp;</span>":`<span style="color:${RB[(i+o)%RB.length]}${o<0?"":""}">${ch}</span>`).join("");
+
+function cloud(x,y,s){return`<g transform="translate(${x} ${y}) scale(${s})"><path d="M-70 20 Q-80 -10 -45 -12 Q-35 -45 0 -38 Q30 -55 50 -22 Q85 -20 72 18 Z" fill="#fff" stroke="#d6eefc" stroke-width="3"/>
+<circle cx="-14" cy="0" r="4" fill="#5b6b80"/><circle cx="16" cy="0" r="4" fill="#5b6b80"/><path d="M-6 8 Q1 15 8 8" stroke="#5b6b80" stroke-width="3" fill="none" stroke-linecap="round"/><circle cx="-26" cy="9" r="5" fill="#ffc0d3"/><circle cx="28" cy="9" r="5" fill="#ffc0d3"/></g>`;}
+function tree(x,y,s){return`<g transform="translate(${x} ${y}) scale(${s})"><path d="M-9 0 L-12 -70 L-30 -95 M-11 -60 L8 -88 L9 0 Z" fill="#a0673a" stroke="#7d4c27" stroke-width="5" stroke-linejoin="round"/><rect x="-10" y="-80" width="19" height="82" rx="6" fill="#a0673a" stroke="#7d4c27" stroke-width="4"/>
+<circle cx="0" cy="-118" r="52" fill="#5fbf3f" stroke="#3f9a2a" stroke-width="5"/><circle cx="-42" cy="-92" r="32" fill="#6fcd48" stroke="#3f9a2a" stroke-width="5"/><circle cx="42" cy="-92" r="32" fill="#6fcd48" stroke="#3f9a2a" stroke-width="5"/><circle cx="-14" cy="-134" r="14" fill="#8ee067" opacity=".8"/></g>`;}
+function flower(x,y,c,s=1){let p="";for(let i=0;i<5;i++){const a=i*72*Math.PI/180;p+=`<circle cx="${(Math.cos(a)*9).toFixed(1)}" cy="${(Math.sin(a)*9).toFixed(1)}" r="7.5" fill="${c}" stroke="#fff" stroke-width="1.5"/>`;}
+  return`<g transform="translate(${x} ${y}) scale(${s})"><path d="M0 4 Q2 20 0 30" stroke="#3f9a2a" stroke-width="3" fill="none"/>${p}<circle r="5.5" fill="#ffd93b"/></g>`;}
+function tuft(x,y,c="#5fb83a"){return`<path d="M${x-10} ${y} Q${x-8} ${y-14} ${x-4} ${y-4} Q${x} ${y-20} ${x+3} ${y-4} Q${x+8} ${y-14} ${x+10} ${y}" fill="none" stroke="${c}" stroke-width="3" stroke-linecap="round"/>`;}
+function drawBg(){
+  const {SW,SH,ox,oy}=VIEW,L=-ox-20,Rt=1024+ox+20,T=-oy-20,B=768+oy+20;
+  const sr=$("sunRays");sr.style.left=(770+ox)+"px";sr.style.top=(62+oy)+"px";
+  if(!sr.childNodes.length)sr.innerHTML=[...Array(12)].map((_,i)=>`<path d="M0 -50 L9 -66 L-9 -66Z" fill="#ffc93d" transform="rotate(${i*30})"/>`).join("");
+  const bg=$("bg");bg.setAttribute("width",SW);bg.setAttribute("height",SH);bg.setAttribute("viewBox",`${-ox} ${-oy} ${SW} ${SH}`);
+  const side=ox>30?`${tree(-ox*.45,470,.9)}${tree(1024+ox*.5,450,.85)}${cloud(-ox*.5,110,.7)}${cloud(1024+ox*.45,80,.65)}${flower(-ox*.3,560,"#ff8fb4",.9)}${flower(1024+ox*.35,600,"#c89cff")}${flower(1024+ox*.7,660,"#ff9e9e",.9)}${tuft(-ox*.6,700)}${tuft(1024+ox*.2,690)}`:"";
+  let s=`<defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a9dcff"/><stop offset="1" stop-color="#e8f8ff"/></linearGradient></defs>
+  <rect x="${L}" y="${T}" width="${Rt-L}" height="${B-T}" fill="url(#sky)"/>
+  <g transform="translate(770 62)">
+   <circle r="44" fill="#ffd93b" stroke="#f7b500" stroke-width="4"/><path d="M-20 -6 Q-14 -13 -8 -6 M8 -6 Q14 -13 20 -6" stroke="#8a5a00" stroke-width="3.5" fill="none" stroke-linecap="round"/><path d="M-10 8 Q0 18 10 8" stroke="#8a5a00" stroke-width="3.5" fill="none" stroke-linecap="round"/><circle cx="-26" cy="8" r="6" fill="#ff9c7a" opacity=".7"/><circle cx="26" cy="8" r="6" fill="#ff9c7a" opacity=".7"/></g>
+  ${cloud(265,78,.9)}${cloud(640,112,.75)}${cloud(905,150,.85)}${cloud(60,170,.55)}
+  <path d="M${L} 430 L0 420 Q170 320 360 400 T720 370 T1024 340 L${Rt} 330 V${B} H${L}Z" fill="#c4eb8c"/>
+  <path d="M${L} 495 L0 490 Q230 420 500 480 T1024 455 L${Rt} 450 V${B} H${L}Z" fill="#a9de6d"/>
+  ${tree(70,470,.95)}${tree(132,488,.55)}${tree(965,440,.9)}
+  ${side}<path d="M${L} 590 L0 585 Q280 545 560 585 T1024 575 L${Rt} 572 V${B} H${L}Z" fill="#94d059"/>
+  <ellipse cx="128" cy="552" rx="26" ry="14" fill="#8fa8d8" stroke="#6d86b8" stroke-width="3"/><ellipse cx="160" cy="560" rx="22" ry="12" fill="#e9a7c8" stroke="#c77ea4" stroke-width="3"/><ellipse cx="190" cy="555" rx="20" ry="11" fill="#ffd36b" stroke="#d8a83a" stroke-width="3"/>
+  <path d="M${L} ${B} L${L} 660 Q${-ox*.5} 610 0 640 Q40 600 90 625 Q140 590 190 630 Q230 640 240 700 L250 ${B}Z" fill="#6cc544" stroke="#4fa52f" stroke-width="4"/>
+  <ellipse cx="300" cy="712" rx="44" ry="22" fill="#b79ad8" stroke="#8f74b5" stroke-width="3"/>
+  ${flower(36,508,"#ff8fb4",.9)}${flower(92,486,"#ff8fb4",.8)}${flower(198,522,"#ff8fb4",.8)}${flower(985,480,"#ff8fb4",.8)}
+  ${flower(30,650,"#c89cff")}${flower(105,660,"#c89cff",.9)}${flower(70,710,"#c89cff",1.1)}${flower(285,688,"#ff7aa8",.9)}${flower(178,700,"#ff9e9e",.8)}
+  ${tuft(370,690)}${tuft(560,720)}${tuft(640,660)}${tuft(240,600)}${tuft(460,610)}${tuft(1000,610)}${tuft(330,640)}`;
+  $("bg").innerHTML=s;
+}
+const st=document.createElement("style");st.textContent="@keyframes spinS{to{transform:rotate(360deg)}}";document.head.appendChild(st);
+
+/* Panda kafası (merkez 0,0) — üzgün ve mutlu yüz katmanları */
+function pandaHead(){return`
+ <g class="earL"><circle cx="-47" cy="-44" r="23" fill="#2b2b33"/><circle cx="-47" cy="-44" r="11" fill="#f6a9bf"/></g>
+ <g class="earR"><circle cx="47" cy="-44" r="23" fill="#2b2b33"/><circle cx="47" cy="-44" r="11" fill="#f6a9bf"/></g>
+ <ellipse rx="65" ry="58" fill="#fff" stroke="#3a3a44" stroke-width="3.5"/>
+ <path d="M-12 -56 Q-4 -72 2 -57 Q8 -70 15 -55" fill="#fff" stroke="#3a3a44" stroke-width="3" stroke-linejoin="round"/>
+ <ellipse cx="-38" cy="20" rx="11" ry="7" fill="#ffb3c7" opacity=".85"/><ellipse cx="38" cy="20" rx="11" ry="7" fill="#ffb3c7" opacity=".85"/>
+ <g class="sadF">
+  <ellipse cx="-24" cy="-2" rx="15" ry="19" fill="#2b2b33" transform="rotate(32 -24 -2)"/><ellipse cx="24" cy="-2" rx="15" ry="19" fill="#2b2b33" transform="rotate(-32 24 -2)"/>
+  <circle cx="-22" cy="3" r="7" fill="#fff"/><circle cx="22" cy="3" r="7" fill="#fff"/><circle cx="-22" cy="6" r="4" fill="#2b2b33"/><circle cx="22" cy="6" r="4" fill="#2b2b33"/>
+  <path d="M-38 -24 L-14 -30 M38 -24 L14 -30" stroke="#2b2b33" stroke-width="4" stroke-linecap="round"/>
+  <path d="M-11 33 Q0 24 11 33" stroke="#3a3a44" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+  <path d="M-31 16 Q-34 24 -31 27 Q-27 24 -31 16Z" fill="#7fd0ff"/>
+ </g>
+ <g class="hapF">
+  <ellipse cx="-24" cy="-4" rx="16" ry="18" fill="#2b2b33" transform="rotate(20 -24 -4)"/><ellipse cx="24" cy="-4" rx="16" ry="18" fill="#2b2b33" transform="rotate(-20 24 -4)"/>
+  <path d="M-31 -1 Q-24 -11 -16 -1 M16 -1 Q24 -11 31 -1" stroke="#fff" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <path d="M-14 24 Q0 46 14 24 Z" fill="#d94b5c" stroke="#3a3a44" stroke-width="3" stroke-linejoin="round"/><ellipse cx="0" cy="33" rx="6" ry="4" fill="#ff9db0"/>
+  <path d="M-52 -26 l3 -8 l3 8 l8 3 l-8 3 l-3 8 l-3 -8 l-8 -3z M50 -30 l2.5 -6 l2.5 6 l6 2.5 l-6 2.5 l-2.5 6 l-2.5 -6 l-6 -2.5z" fill="#ffd93b"/>
+ </g>
+ <ellipse cx="0" cy="15" rx="8" ry="5.5" fill="#2b2b33"/>`;}
+function pandaBadge(happy){return`<g class="${happy?"":"sadOnly"}"><style>.sadOnly .hapF{display:none}</style>${pandaHead().replace(happy?'class="sadF"':'class="hapF"',happy?'class="sadF" style="display:none"':'class="hapF" style="display:none"')}</g>`;}
+
+function duckSVG(){return`<g class="bob"><ellipse cx="0" cy="-14" rx="24" ry="15" fill="#ffd93b" stroke="#e0a800" stroke-width="3"/><path d="M14 -22 Q30 -30 24 -12" fill="#ffd93b" stroke="#e0a800" stroke-width="3"/>
+ <circle cx="-12" cy="-36" r="14" fill="#ffd93b" stroke="#e0a800" stroke-width="3"/><path d="M-26 -36 L-38 -32 L-26 -29Z" fill="#ff8c1a" stroke="#e06d00" stroke-width="2" stroke-linejoin="round"/>
+ <circle cx="-16" cy="-39" r="2.8" fill="#2b2b33"/><path d="M-6 -16 Q2 -8 12 -16" stroke="#e0a800" stroke-width="3" fill="none"/></g>`;}
+
+function drawTub(){
+  const V='viewBox="0 0 330 330"';
+  $("tub").innerHTML=`
+  <svg class="ly" ${V}>
+    <ellipse cx="160" cy="320" rx="150" ry="10" fill="#4f9a2f" opacity=".25"/>
+    <path d="M58 300 L52 324 Q60 330 70 324 L74 300Z M262 300 L268 324 Q260 330 250 324 L246 300Z" fill="#ff9cc6" stroke="#e0669a" stroke-width="3"/>
+    <ellipse cx="160" cy="210" rx="140" ry="24" fill="#e57fa6"/>
+    <path d="M20 210 A140 24 0 0 1 300 210" fill="none" stroke="#ffb3d6" stroke-width="11"/>
+  </svg>
+  <div class="ly wrap swayW"><div class="ly wrap jumpW">
+    <svg class="ly" ${V}>
+      <ellipse cx="190" cy="228" rx="58" ry="50" fill="#2b2b33"/><ellipse cx="190" cy="232" rx="40" ry="40" fill="#fff"/>
+      <g transform="translate(190 140)">${pandaHead()}</g>
+    </svg>
+    <svg class="ly wrap armUp armL" ${V}><rect x="119" y="134" width="24" height="64" rx="12" fill="#2b2b33"/></svg>
+    <svg class="ly wrap armUp armR" ${V}><rect x="237" y="134" width="24" height="64" rx="12" fill="#2b2b33"/></svg>
+  </div></div>
+  <div class="ly wrap waterW"><svg class="ly wrap sloshL" ${V}>
+    <ellipse cx="160" cy="212" rx="132" ry="19" fill="#7fd0ff"/><ellipse cx="160" cy="208" rx="110" ry="11" fill="#b8e9ff"/><g id="foamG"></g>
+  </svg></div>
+  <svg class="ly" ${V}>
+    <defs><clipPath id="tubClip"><path d="M20 210 A140 24 0 0 0 300 210 L296 250 Q290 306 240 309 L80 309 Q30 306 24 250 Z"/></clipPath></defs>
+    <path d="M20 210 A140 24 0 0 0 300 210 L296 250 Q290 306 240 309 L80 309 Q30 306 24 250 Z" fill="#ffc2dc" stroke="#e0669a" stroke-width="4"/>
+    <g clip-path="url(#tubClip)"><path d="M10 248 Q160 274 310 248 L310 266 Q160 292 10 266Z" fill="#ffe066"/><path d="M10 274 Q160 300 310 274 L310 286 Q160 312 10 286Z" fill="#ff9cc6"/><ellipse cx="78" cy="250" rx="30" ry="10" fill="#fff" opacity=".35"/></g>
+    <path d="M20 210 A140 24 0 0 0 300 210" fill="none" stroke="#ff9cc6" stroke-width="11" stroke-linecap="round"/>
+    <path d="M20 210 A140 24 0 0 0 300 210" fill="none" stroke="#e0669a" stroke-width="2" transform="translate(0 6)"/>
+  </svg>
+  <div class="ly wrap swayW armsDown"><svg class="ly" ${V}><ellipse cx="135" cy="222" rx="18" ry="12" fill="#2b2b33"/><ellipse cx="245" cy="222" rx="18" ry="12" fill="#2b2b33"/></svg></div>
+  <div class="ly wrap duckW"><svg class="ly wrap bobL" ${V}>${duckSVG().replace('class="bob"','')}</svg></div>
+  <svg class="ly" ${V}><rect id="stream" x="62" y="168" width="12" height="0" rx="6" fill="#8fdcff"/></svg>
+  <svg class="ly" ${V}><g id="tubFx"></g></svg>`;
+}
+
+/* Vana (sevimli yüzlü musluk) — merkez 0,0 */
+function faucetSVG(id){return`<g id="${id||""}">
+  <rect x="-8" y="-72" width="16" height="34" rx="4" fill="#3b95dd" stroke="#1d6fc4" stroke-width="3"/>
+  <g transform="translate(0 -76)"><g class="spin"><ellipse cx="-27" cy="0" rx="27" ry="9" fill="#4aa8f0" stroke="#1d6fc4" stroke-width="3"/><ellipse cx="27" cy="0" rx="27" ry="9" fill="#4aa8f0" stroke="#1d6fc4" stroke-width="3"/><circle r="9" fill="#2f86d6" stroke="#1d6fc4" stroke-width="3"/></g></g>
+  <rect x="-64" y="-24" width="14" height="48" rx="4" fill="#3aa7f5" stroke="#1d6fc4" stroke-width="3"/><rect x="50" y="-24" width="14" height="48" rx="4" fill="#3aa7f5" stroke="#1d6fc4" stroke-width="3"/>
+  <circle r="42" fill="#4aa8f0" stroke="#1d6fc4" stroke-width="4"/><ellipse cx="-16" cy="-22" rx="14" ry="7" fill="#fff" opacity=".45" transform="rotate(-25 -16 -22)"/>
+  <g class="fNorm"><circle cx="-14" cy="-2" r="6.5" fill="#22324a"/><circle cx="14" cy="-2" r="6.5" fill="#22324a"/><circle cx="-12" cy="-4" r="2.2" fill="#fff"/><circle cx="16" cy="-4" r="2.2" fill="#fff"/><path d="M-7 10 Q0 16 7 10" stroke="#22324a" stroke-width="3" fill="none" stroke-linecap="round"/></g>
+  <g class="fHap"><path d="M-20 -2 Q-14 -10 -8 -2 M8 -2 Q14 -10 20 -2" stroke="#22324a" stroke-width="3.5" fill="none" stroke-linecap="round"/><path d="M-9 8 Q0 20 9 8Z" fill="#d94b5c" stroke="#22324a" stroke-width="2.5"/></g>
+  <circle cx="-26" cy="10" r="6" fill="#ffb3c7" opacity=".8"/><circle cx="26" cy="10" r="6" fill="#ffb3c7" opacity=".8"/>
+ </g>`;}
+
+/* Boru çizimi (yerel, dönmemiş koordinatlar 0..100) */
+const PIPE_D={I:"M50 -1 L50 101",L:"M50 -1 L50 25 Q50 50 75 50 L101 50",T:"M-1 50 L101 50 M50 50 L50 101"};
+function pipeSVG(t){const d=PIPE_D[t];
+  let s=`<path class="po" d="${d}"/><path class="pb" d="${d}"/><path class="ph" d="${d}"/>`;
+  if(t==="T")s+=`<circle class="jt" cx="50" cy="50" r="14"/><circle cx="50" cy="50" r="5" fill="#fff" opacity=".35"/>`;
+  OPEN[t].forEach(k=>{s+=`<rect class="fl" x="31" y="2" width="38" height="11" rx="4" transform="rotate(${k*90} 50 50)"/>`;});
+  return s;}
+function decoSVG(i){const v=i%3;
+  return v===0?`<g class="deco">${tuft(30,70,"#6dbb3f")}${tuft(68,40,"#6dbb3f")}<ellipse cx="66" cy="74" rx="9" ry="6" fill="#a98563"/></g>`
+   :v===1?`<g class="deco"><ellipse cx="32" cy="36" rx="8" ry="5" fill="#a98563"/><ellipse cx="70" cy="66" rx="11" ry="7" fill="#b08d6a"/>${tuft(48,82,"#6dbb3f")}</g>`
+   :`<g class="deco">${flower(64,40,"#ff9ec4",.7)}${tuft(30,76,"#6dbb3f")}<ellipse cx="30" cy="30" rx="7" ry="5" fill="#a98563"/></g>`;}
+
+/* =====================================================================
+   OYUN MANTIĞI
+   ===================================================================== */
+const G={lv:1,R:0,C:0,cell:0,gl:0,gt:0,gw:0,gh:0,cells:[],path:[],busy:false,seq:0,firstTap:true};
+
+function startLevel(lv){
+  lv=Math.max(1,Math.min(TOTAL,lv|0));
+  if(progLocked(lv)){SFX.lock();toast(`Önce Seviye ${lv-1}'i bitir!`);return;}
+  if(payLocked(lv)){openPay(lv);return;}
+  G.seq++;G.lv=lv;G.busy=false;
+  const L=LEVELS[lv-1];G.R=L.r;G.C=L.c;
+  const reqMap={};L.p.forEach(([k,req])=>reqMap[k]=req);G.path=L.p.map(([k])=>k);
+  const grid=$("grid");grid.innerHTML="";
+  G.cells=L.g.map((s,k)=>{
+    const el=document.createElement("div");el.className="cell";
+    if(s==="."){el.innerHTML=`<svg viewBox="0 0 100 100">${decoSVG(k+lv)}</svg>`;grid.appendChild(el);return null;}
+    const t=s[0],rot=+s[1],sol=s[2]==="x"?-1:+s[2];
+    el.innerHTML=`<svg class="pipe" viewBox="0 0 100 100">${pipeSVG(t)}</svg><svg class="water" viewBox="0 0 100 100"></svg>`;
+    const c={t,rot,sol,req:reqMap[k]||0,path:sol>=0,deg:rot*90,el,pipe:el.firstChild,water:el.lastChild};
+    c.pipe.style.transition="none";c.pipe.style.transform=`rotate(${c.deg}deg)`;
+    grid.appendChild(el);return c;
+  });
+  requestAnimationFrame(()=>G.cells.forEach(c=>c&&(c.pipe.style.transition="")));
+  G.cellEls=[...grid.children];
+  showScreen("scrGame");
+  layoutGame();
+  $("scrGame").classList.remove("still");if(confRun)confRun.stop();
+  const tub=$("tub");tub.classList.remove("happy","full");tub.classList.add("sad");
+  $("stream").setAttribute("height",0);$("foamG").innerHTML="";$("tubFx").innerHTML="";
+  $("lvTitle").innerHTML=rainbow("Seviye "+lv);
+  updateWet();
+  // Seviye 1'de yol gösteren el
+  G.firstTap=(lv===1&&!save.done[1]);placeHand();
+}
+function placeHand(){const h=$("hand");
+  if(!G.firstTap){h.style.display="none";return;}
+  const k=G.path.find(k=>!cellOk(k));if(k===undefined){h.style.display="none";return;}
+  const r=Math.floor(k/G.C),c=k%G.C;
+  const hs=G.cell/150;h.style.width=70*hs+"px";h.style.height=80*hs+"px";
+  h.style.left=(G.gl+c*G.cell+G.cell*.45)+"px";h.style.top=(G.gt+r*G.cell+G.cell*.45)+"px";h.style.display="block";}
+
+/* =====================================================================
+   DİNAMİK YERLEŞİM: ızgara ekran yüksekliğinin büyük kısmını kaplar,
+   vana sol üstte, küvet + panda sağ altta ekranın genişliğine göre büyür.
+   Tüm değerler sahne (SW x SH) birimindedir; SH yatay cihazlarda 768'dir.
+   ===================================================================== */
+const FR=16;                    // ızgara çerçevesi (padding 12 + kenarlık 4)
+function safeInsets(){const cs=getComputedStyle($("stage"));return[parseFloat(cs.getPropertyValue("--safeL"))||0,parseFloat(cs.getPropertyValue("--safeR"))||0];}
+function layoutGame(){
+  if(!G.cells.length)return;
+  const {SW,SH}=VIEW,[sl,sr]=safeInsets(),R=G.R,C=G.C;
+  const TOP=94,BOT=14,M=14;
+  const Fmin=Math.max(160,Math.min(220,SW*.15));       // vana alanı
+  const Tmin=Math.max(220,Math.min(300,SW*.2));         // küvet + panda alanı
+  let cell=Math.min((SH-TOP-BOT-2*FR)/R, SH*(R===1?.46:.36), (SW-sl-sr-Fmin-Tmin-2*FR-2*M)/C);
+  cell=Math.max(64,Math.floor(cell));
+  const gw=cell*C,gh=cell*R;
+  const free=Math.max(0,SW-sl-sr-Fmin-Tmin-gw-2*FR-2*M);
+  const gl=Math.round(sl+M+Fmin+FR+free*.42);
+  const gt=Math.round(TOP+FR+Math.max(0,SH-TOP-BOT-2*FR-gh)*.35);
+  Object.assign(G,{cell,gw,gh,gl,gt});
+  const grid=$("grid");grid.style.gridTemplateColumns=`repeat(${C},${cell}px)`;
+  G.cellEls.forEach(el=>{el.style.width=el.style.height=cell+"px";});
+  const b=$("board");b.style.left=(gl-FR)+"px";b.style.top=(gt-FR)+"px";
+  // küvet + panda: ızgaranın sağında kalan alana sığacak kadar büyük
+  const gr=gl+gw+FR,Tw=SW-sr-M-gr;
+  const kt=Math.max(.68,Math.min(Tw/330,SH*.6/330,1.6));
+  const tw=330*kt,tl=gr+Math.max(6,(Tw-tw)*.5),tt=SH-336*kt;
+  const tub=$("tub");Object.assign(tub.style,{left:tl+"px",top:tt+"px",width:tw+"px",height:tw+"px"});
+  G.tub={x:tl,y:tt,k:kt};
+  drawPlumb();placeHand();
+}
+/* Geniş dokunma alanı: ızgaranın çerçevesi dahil her nokta en yakın hücreye gider */
+$("board").addEventListener("pointerdown",e=>{
+  e.preventDefault();
+  if(!G.cells.length||G.busy)return;
+  const r=$("grid").getBoundingClientRect(),s=VIEW.s;
+  const x=(e.clientX-r.left)/s,y=(e.clientY-r.top)/s;
+  const c=Math.max(0,Math.min(G.C-1,Math.floor(x/G.cell))),rr=Math.max(0,Math.min(G.R-1,Math.floor(y/G.cell)));
+  let k=rr*G.C+c;
+  if(!G.cells[k]){   // boş toprağa dokunulduysa çok yakındaki boruyu çevir (kenar toleransı)
+    const fx=x/G.cell-c,fy=y/G.cell-rr,cand=[];
+    if(fx<.25&&c>0)cand.push(k-1);if(fx>.75&&c<G.C-1)cand.push(k+1);
+    if(fy<.25&&rr>0)cand.push(k-G.C);if(fy>.75&&rr<G.R-1)cand.push(k+G.C);
+    k=cand.find(i=>G.cells[i]);if(k===undefined)return;
+  }
+  tapCell(k);
+});
+const cellMask=c=>c?maskOf(c.t,c.rot):0;
+const cellOk=k=>{const c=G.cells[k];return(cellMask(c)&c.req)===c.req;};
+
+function tapCell(k){
+  if(G.busy)return;const c=G.cells[k];if(!c)return;
+  c.rot=(c.rot+1)%4;c.deg+=90;c.pipe.style.transform=`rotate(${c.deg}deg)`;
+  c.el.classList.remove("pop","hint");void c.el.offsetWidth;c.el.classList.add("pop");
+  SFX.tik();
+  const f=updateWet();
+  if(G.firstTap)placeHand();
+  if(f.ok){G.busy=true;$("hand").style.display="none";const my=G.seq;setTimeout(()=>{if(my===G.seq)winSequence(f);},260);}
+}
+/* Suyun vanadan itibaren ulaşabildiği hücreler (BFS) */
+function flow(){
+  const {R,C,cells}=G,out=[],seen=new Set();let ok=false;
+  const c0=cells[0];if(!c0||!(cellMask(c0)&W))return{ok,list:out,set:seen};
+  const q=[[0,3,0]];seen.add(0);
+  while(q.length){const [k,e,d]=q.shift();out.push({k,e,d});const m=cellMask(cells[k]);
+    if(k===C-1&&(m&E))ok=true;          // çıkış: sağ ÜST hücreden sağa → küvete inen boru
+    const r=Math.floor(k/C),c=k%C;
+    for(let s=0;s<4;s++){if(!(m&(1<<s)))continue;const nr=r+DR[s],nc=c+DC[s];if(nr<0||nc<0||nr>=R||nc>=C)continue;
+      const nk=nr*C+nc,n=cells[nk];if(!n||seen.has(nk))continue;
+      if(cellMask(n)&(1<<((s+2)%4))){seen.add(nk);q.push([nk,(s+2)%4,d+1]);}}}
+  return{ok,list:out,set:seen};
+}
+function updateWet(){const f=flow();G.cells.forEach((c,k)=>c&&c.el.classList.toggle("wet",f.set.has(k)));return f;}
+
+function hint(){
+  if(G.busy)return;
+  const k=G.path.find(k=>!cellOk(k));if(k===undefined)return;
+  const c=G.cells[k];SFX.hint();
+  const target=c.sol;let steps=(target-c.rot+4)%4;if(steps===0)steps=4;
+  c.rot=target;c.deg+=steps*90;c.pipe.style.transform=`rotate(${c.deg}deg)`;
+  c.el.classList.remove("hint");void c.el.offsetWidth;c.el.classList.add("hint");
+  const f=updateWet();if(G.firstTap)placeHand();
+  if(f.ok){G.busy=true;$("hand").style.display="none";const my=G.seq;setTimeout(()=>{if(my===G.seq)winSequence(f);},380);}
+}
+
+/* Vana + giriş/çıkış boruları */
+function drawPlumb(){
+  const {SW,SH}=VIEW,[sl]=safeInsets();
+  const pl=$("plumb");pl.setAttribute("width",SW);pl.setAttribute("height",SH);pl.setAttribute("viewBox",`0 0 ${SW} ${SH}`);
+  const y0=G.gt+G.cell/2,xL=G.gl,xR=G.gl+G.gw;
+  const pw=Math.max(30,G.cell*.24);                                 // borularla aynı kalınlık
+  const kf=Math.max(.85,Math.min(pw/34,(y0-92)/86,1.6));            // vana ölçeği (üst bar ile çakışmaz)
+  const fx=Math.max(sl+68*kf,sl+(xL-FR-sl)*.45);
+  // çıkış: sağ üst hücreden sağa, sonra aşağı küvete
+  const T=G.tub,sx=T.x+68*T.k,sy=T.y+170*T.k,rr=Math.max(20,pw*.9);
+  const inP=`M-30 ${y0} H${xL}`,inW=`M${fx} ${y0} H${xL}`;
+  const outP=`M${xR} ${y0} H${sx-rr} Q${sx} ${y0} ${sx} ${y0+rr} V${sy-6}`;
+  const pipe=d=>`<path class="po" d="${d}" style="stroke-width:${pw+10}"/><path class="pb" d="${d}" style="stroke-width:${pw}"/><path class="ph" d="${d}" style="stroke-width:${pw*.2}"/>`;
+  const fl=pw*1.5,ft=pw*.38;
+  pl.innerHTML=`
+   ${pipe(inP)}${pipe(outP)}
+   <rect class="fl" x="${xL-FR-ft-4}" y="${y0-fl/2}" width="${ft}" height="${fl}" rx="4"/>
+   <rect class="fl" x="${xR+FR+4}" y="${y0-fl/2}" width="${ft}" height="${fl}" rx="4"/>
+   <rect class="fl" x="${sx-fl/2}" y="${(y0+sy)/2}" width="${fl}" height="${ft}" rx="4"/>
+   <rect x="${sx-pw*.65}" y="${sy-pw*.5}" width="${pw*1.3}" height="${pw*.65}" rx="${pw*.2}" fill="#3aa7f5" stroke="#1d6fc4" stroke-width="3"/>
+   <path class="wf" id="inW" d="${inW}" pathLength="100" style="stroke-width:${pw*.45};--d:.4s"/>
+   <path class="wf" id="outW" d="M${xR} ${y0} H${sx-rr} Q${sx} ${y0} ${sx} ${y0+rr} V${sy}" pathLength="100" style="stroke-width:${pw*.45};--d:.5s"/>
+   <g id="faucet" transform="translate(${fx} ${y0}) scale(${kf})">${faucetSVG()}</g>
+   <path class="drip" d="M${xL-FR-18} ${y0+pw*.6} q-5 8 0 11 q5 -3 0 -11z" fill="#7fd0ff"/>
+   <path class="drip d2" d="M${xL-FR-32} ${y0+pw*.6} q-4 7 0 9 q4 -2 0 -9z" fill="#7fd0ff"/>`;
+}
+
+const MID=[[50,0],[100,50],[50,100],[0,50]],IN25=[[50,25],[75,50],[50,75],[25,50]];
+function waterPath(e,o){return (e+2)%4===o?`M${MID[e]} L${MID[o]}`:`M${MID[e]} L${IN25[e]} Q50 50 ${IN25[o]} L${MID[o]}`;}
+function fillPath(svg,d,dur,shim){
+  const ns="http://www.w3.org/2000/svg",p=document.createElementNS(ns,"path");
+  p.setAttribute("d",d);p.setAttribute("pathLength","100");p.setAttribute("class","wf");p.style.setProperty("--d",dur+"ms");svg.appendChild(p);
+  requestAnimationFrame(()=>requestAnimationFrame(()=>p.classList.add("go")));
+  if(shim)setTimeout(()=>{const s=document.createElementNS(ns,"path");s.setAttribute("d",d);s.setAttribute("class","ws");svg.appendChild(s);},dur);
+}
+
+async function winSequence(f){
+  const my=G.seq,alive=()=>my===G.seq;
+  const fau=$("faucet");fau.classList.add("open");$("plumb").classList.add("flowing");SFX.valve();
+  await sleep(380);if(!alive())return;
+  const stopW=SFX.water();const stopIf=()=>{if(!alive()){stopW();return true;}return false;};
+  $("inW").classList.add("go");
+  await sleep(380);if(stopIf())return;
+  const maxD=Math.max(...f.list.map(x=>x.d)),STEP=G.R*G.C>9?190:230;
+  for(let d=0;d<=maxD;d++){
+    f.list.filter(x=>x.d===d).forEach(({k,e})=>{const c=G.cells[k];const m=cellMask(c);
+      for(let o=0;o<4;o++)if(o!==e&&(m&(1<<o)))fillPath(c.water,waterPath(e,o),STEP,true);});
+    await sleep(STEP);if(stopIf())return;
+  }
+  $("outW").classList.add("go");
+  await sleep(450);if(stopIf())return;
+  const tub=$("tub");$("stream").setAttribute("height",44);
+  tub.classList.add("full");SFX.splash();
+  addFoam();
+  await sleep(650);if(stopIf())return;
+  // Su akışı bitti: akan su ve boru parıltısı dondurulur, AYNI karede panda zıplar + konfeti patlar
+  $("stream").setAttribute("height",0);$("scrGame").classList.add("still");
+  await new Promise(r=>requestAnimationFrame(r));if(stopIf())return;
+  tub.classList.remove("sad");tub.classList.add("happy");
+  SFX.win();confetti(38);splashFx();
+  for(let i=0;i<6;i++)setTimeout(()=>{if(alive())SFX.clap();},i*310);
+  await sleep(900);stopW();if(!alive())return;
+  save.done[G.lv]=true;save.maxUnlocked=Math.max(save.maxUnlocked,Math.min(TOTAL,G.lv+1));persist();
+  await sleep(1300);if(!alive())return;
+  showWin();
+}
+function addFoam(){const g=$("foamG");let s="";
+  for(let i=0;i<16;i++){const a=i/16*Math.PI*2,x=160+Math.cos(a)*118*(.8+Math.random()*.2),y=210+Math.sin(a)*15,r=7+Math.random()*9;
+    s+=`<circle class="foam" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(1)}" fill="#fff" stroke="#d9f2ff" stroke-width="2" style="animation-delay:${(i*40)}ms"/>`;}
+  g.innerHTML=s;}
+function splashFx(){const fx=$("tubFx");let s="";
+  for(let i=0;i<26;i++){const x=40+Math.random()*240,bub=i%2===0,dx=(Math.random()-.5)*160,dy=-(70+Math.random()*130),t=1+Math.random()*1.2;
+    s+=bub?`<circle class="bub" cx="${x.toFixed(0)}" cy="205" r="${(4+Math.random()*8).toFixed(1)}" fill="rgba(255,255,255,.75)" stroke="#9adfff" stroke-width="2" style="--dx:${dx}px;--dy:${dy}px;--t:${t}s;animation-delay:${(Math.random()*.6).toFixed(2)}s"/>`
+      :`<path class="bub" d="M${x.toFixed(0)} 200 q-6 10 0 14 q6 -4 0 -14z" fill="#5ec4ff" style="--dx:${dx}px;--dy:${dy}px;--t:${t}s;animation-delay:${(Math.random()*.4).toFixed(2)}s"/>`;}
+  fx.innerHTML=s;
+  setTimeout(()=>{if(fx.innerHTML)splashFx2();},1500);}
+function splashFx2(){if(!$("tub").classList.contains("happy"))return;const fx=$("tubFx");let s="";
+  for(let i=0;i<14;i++){const x=40+Math.random()*240,dx=(Math.random()-.5)*100,dy=-(60+Math.random()*120);
+    s+=`<circle class="bub" cx="${x.toFixed(0)}" cy="205" r="${(4+Math.random()*7).toFixed(1)}" fill="rgba(255,255,255,.75)" stroke="#9adfff" stroke-width="2" style="--dx:${dx}px;--dy:${dy}px;--t:2s;animation-delay:${(Math.random()*1.5).toFixed(2)}s"/>`;}
+  fx.innerHTML=s;}
+/* =====================================================================
+   KONFETİ (tek geçici <canvas>, ~38 iri parçacık, ≤2 sn, sonra bellekten silinir)
+   ===================================================================== */
+const CONF_COLS=["#ff4d6d","#ffc93d","#3dd13a","#2b96f0","#9b5cff","#ff7ab8","#38e0ff","#ff9f1a"];
+let confRun=null;
+function confetti(n){
+  n=Math.max(30,Math.min(40,n||38));
+  if(confRun)confRun.stop();                                   // aynı anda tek konfeti döngüsü
+  const dpr=Math.min(window.devicePixelRatio||1,2),W=innerWidth,H=innerHeight;
+  const cv=document.createElement("canvas");cv.id="confettiCv";
+  cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);
+  document.body.appendChild(cv);
+  const ctx=cv.getContext("2d",{alpha:true});ctx.setTransform(dpr,0,0,dpr,0,0);
+  const u=Math.max(.6,Math.min(1.6,H/420));                     // ekran boyutuna göre parça büyüklüğü
+  // patlama noktaları: panda/küvet ve ekranın ortası
+  let ox=W*.78,oy=H*.62;
+  const tub=$("tub");if(tub&&$("scrGame").classList.contains("on")){const r=tub.getBoundingClientRect();ox=r.left+r.width*.55;oy=r.top+r.height*.45;}
+  const P=[];
+  for(let i=0;i<n;i++){
+    const fromTub=i%3!==2,x0=fromTub?ox:W*(.3+Math.random()*.4),y0=fromTub?oy:H*.55;
+    const a=-Math.PI/2+(Math.random()-.5)*(fromTub?1.9:2.4),sp=(fromTub?620:560)*(.75+Math.random()*.55)*u;
+    P.push({x:x0,y:y0,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,rot:Math.random()*6.28,vr:(Math.random()-.5)*12,
+      w:(15+Math.random()*10)*u,h:(10+Math.random()*7)*u,sh:i%4,c:CONF_COLS[i%CONF_COLS.length],
+      flip:Math.random()*6.28,vf:6+Math.random()*6});
+  }
+  const G2=1500*u,DUR=1.9;let t0=0,last=0,raf=0,dead=false;
+  function star(r){ctx.beginPath();for(let k=0;k<10;k++){const q=k%2?r*.48:r,an=k*Math.PI/5-Math.PI/2;ctx.lineTo(Math.cos(an)*q,Math.sin(an)*q);}ctx.closePath();}
+  function frame(ts){
+    if(dead)return;
+    if(!t0){t0=ts;last=ts;}
+    const dt=Math.min(.034,(ts-last)/1000);last=ts;const el=(ts-t0)/1000;
+    ctx.clearRect(0,0,W,H);
+    let alive=0;
+    for(const p of P){
+      p.vy+=G2*dt;p.vx*=1-.9*dt;p.vy*=1-.35*dt;p.x+=p.vx*dt;p.y+=p.vy*dt;p.rot+=p.vr*dt;p.flip+=p.vf*dt;
+      if(p.y>H+60)continue;alive++;
+      const fade=el>DUR-.35?Math.max(0,(DUR-el)/.35):1;
+      ctx.save();ctx.globalAlpha=fade;ctx.translate(p.x,p.y);ctx.rotate(p.rot);
+      const sx=Math.abs(Math.cos(p.flip))*.75+.25;ctx.scale(sx,1);   // kâğıt gibi dönme
+      ctx.fillStyle=p.c;
+      if(p.sh===0||p.sh===1){ctx.beginPath();ctx.roundRect?ctx.roundRect(-p.w/2,-p.h/2,p.w,p.h,p.h*.3):ctx.rect(-p.w/2,-p.h/2,p.w,p.h);ctx.fill();
+        ctx.fillStyle="rgba(255,255,255,.45)";ctx.fillRect(-p.w/2+p.w*.12,-p.h/2+p.h*.18,p.w*.76,p.h*.22);}   // parlak şerit
+      else if(p.sh===2){ctx.beginPath();ctx.arc(0,0,p.h*.62,0,6.2832);ctx.fill();
+        ctx.fillStyle="rgba(255,255,255,.55)";ctx.beginPath();ctx.arc(-p.h*.2,-p.h*.2,p.h*.2,0,6.2832);ctx.fill();}
+      else{star(p.w*.62);ctx.fill();ctx.lineWidth=2;ctx.strokeStyle="rgba(255,255,255,.7)";ctx.stroke();}
+      ctx.restore();
+    }
+    if(el>=DUR||alive===0){stop();return;}
+    raf=requestAnimationFrame(frame);
+  }
+  function stop(){if(dead)return;dead=true;cancelAnimationFrame(raf);ctx.clearRect(0,0,W,H);cv.width=cv.height=0;cv.remove();P.length=0;if(confRun===api)confRun=null;}
+  const api={stop};confRun=api;
+  raf=requestAnimationFrame(frame);
+}
+
+/* =====================================================================
+   EKRANLAR & MENÜLER
+   ===================================================================== */
+function showScreen(id){document.querySelectorAll(".screen").forEach(s=>s.classList.toggle("on",s.id===id));
+  if(id!=="scrGame"){G.seq++;G.busy=false;$("hand").style.display="none";}}
+function openOv(id){$(id).classList.add("on");}
+function closeOv(id){$(id).classList.remove("on");}
+function closeAllOv(){document.querySelectorAll(".ov.on").forEach(o=>o.classList.remove("on"));}
+document.querySelectorAll("[data-close]").forEach(b=>b.addEventListener("click",()=>{SFX.ui();closeOv(b.dataset.close);}));
+function toast(msg){const t=$("toast");t.textContent=msg;t.classList.add("on");clearTimeout(toast.tm);toast.tm=setTimeout(()=>t.classList.remove("on"),2200);}
+
+function renderLevels(){
+  const g=$("lvGrid");g.innerHTML="";
+  for(let i=1;i<=TOTAL;i++){const b=document.createElement("button");const tier=Math.ceil(i/10);
+    const prog=progLocked(i),pay=!prog&&payLocked(i),lock=prog||pay;
+    b.className=`lvb t${tier}${lock?" locked":""}${pay?" pay":""}${(!lock&&i===save.maxUnlocked&&!save.done[i])?" cur":""}`;
+    b.innerHTML=i+(lock?LOCK_ICON(pay):"")+(save.done[i]&&!lock?`<span class="ok">★</span>`:"");
+    b.addEventListener("click",()=>{
+      if(pay){SFX.ui();openPay(i);return;}
+      if(prog){SFX.lock();b.classList.remove("shake");void b.offsetWidth;b.classList.add("shake");toast(`Önce Seviye ${i-1}'i bitir!`);return;}
+      SFX.ui();startLevel(i);});
+    g.appendChild(b);}
+  $("lvLegend").textContent=save.purchased?"Seviyeler sırayla açılır: bir seviyeyi bitir, sonrakine geç! ★ = tamamlandı":"Seviyeler sırayla açılır · İlk 10 seviye ücretsiz · Seviye 11 için ebeveyn onaylı satın alma";
+}
+const LOCK_ICON=pay=>`<svg class="lk" width="34" height="38" viewBox="0 0 34 38"><path d="M9 16 V11 a8 8 0 0 1 16 0 V16" stroke="#7d8794" stroke-width="5" fill="none"/><rect x="3" y="15" width="28" height="21" rx="6" fill="${pay?"#ffc93d":"#c3cad3"}" stroke="${pay?"#d99a00":"#8b95a1"}" stroke-width="3"/><circle cx="17" cy="25" r="3.5" fill="${pay?"#a86f00":"#6b7480"}"/></svg>`;
+function firstPlayable(){return Math.min(TOTAL,save.maxUnlocked);}   // zincirde ulaşılan son seviye (11 ise ödeme duvarı açılır)
+
+function showWin(){
+  const last=G.lv>=TOTAL;
+  $("winTitle").textContent=last?"Usta Su Yolcusu!":["Harika!","Süper!","Muhteşem!","Aferin!","Bravo!"][G.lv%5];
+  $("winText").textContent=last?"50 seviyenin hepsini bitirdin! Panda çok mutlu!":"Su küvete ulaştı, panda mis gibi banyo yapıyor!";
+  $("btnNext").style.display=last?"none":"";
+  openOv("ovWin");
+}
+
+/* ---------- SATIN ALMA & EBEVEYN KİLİDİ ---------- */
+let payTarget=FREE_LEVELS+1;
+function openPay(lv){payTarget=lv||FREE_LEVELS+1;$("btnBuy").textContent="Tüm Seviyeleri Aç - "+PRICE;openOv("ovPay");}
+let gateAns=0,gateVal="",gateCb=null;
+function parentGate(cb){gateCb=cb;const a=5+Math.floor(Math.random()*5),b=4+Math.floor(Math.random()*6);gateAns=a+b;gateVal="";
+  $("gateQ").textContent=`${a} + ${b} = ?`;$("gateIn").textContent="";openOv("ovGate");}
+(function buildKeys(){const k=$("keys");["1","2","3","4","5","6","7","8","9","⌫","0","✓"].forEach(v=>{const b=document.createElement("button");b.textContent=v;if(v==="✓")b.className="ok";
+  b.addEventListener("click",()=>{SFX.ui();if(v==="⌫")gateVal=gateVal.slice(0,-1);else if(v==="✓"){checkGate();return;}else if(gateVal.length<3)gateVal+=v;$("gateIn").textContent=gateVal;});k.appendChild(b);});})();
+function checkGate(){
+  if(gateVal!==""&&parseInt(gateVal,10)===gateAns){closeOv("ovGate");const cb=gateCb;gateCb=null;cb&&cb();}
+  else{const g=$("gateIn");g.classList.remove("err");void g.offsetWidth;g.classList.add("err");SFX.lock();const cb=gateCb;setTimeout(()=>parentGate(cb),450);}
+}
+/* Google Play Billing (Capacitor) bağlandığında:
+   window.PandaBilling.buy("unlock_all_levels") / .restore("unlock_all_levels") -> Promise<boolean>
+   Köprü yoksa (tarayıcı prototipi) satın alma simüle edilir. */
+async function purchase(restore){
+  const B=window.PandaBilling;let ok=false;
+  try{ if(B&&typeof B[restore?"restore":"buy"]==="function")ok=!!(await B[restore?"restore":"buy"](SKU)); else ok=true; }catch(e){ok=false;}
+  if(ok){save.purchased=true;persist();closeOv("ovPay");closeOv("ovWin");SFX.win();confetti(38);
+    renderLevels();
+    if(save.maxUnlocked>=FREE_LEVELS+1){toast("Seviye 11 açıldı!");startLevel(FREE_LEVELS+1<=save.maxUnlocked&&!save.done[FREE_LEVELS+1]?FREE_LEVELS+1:save.maxUnlocked);}
+    else{toast("Satın alma tamam! Seviye 10'u bitirince Seviye 11 açılır.");showScreen("scrLevels");}}
+  else toast(restore?"Geri yüklenecek satın alım bulunamadı.":"Satın alma tamamlanamadı.");
+}
+$("btnBuy").addEventListener("click",()=>{SFX.ui();parentGate(()=>purchase(false));});
+$("btnRestore").addEventListener("click",()=>{SFX.ui();parentGate(()=>purchase(true));});
+
+/* ---------- BUTONLAR ---------- */
+const ICON_BULB=`<svg width="44" height="44" viewBox="0 0 44 44"><g stroke="#fff" stroke-width="3" stroke-linecap="round"><path d="M22 2v5M6 9l4 4M38 9l-4 4M2 24h5M37 24h5"/></g><path d="M22 10a11 11 0 0 0-6 20v4h12v-4a11 11 0 0 0-6-20z" fill="#fff6b0" stroke="#fff" stroke-width="3"/><rect x="16" y="35" width="12" height="5" rx="2" fill="#fff"/></svg>`;
+const ICON_PLAY=`<svg width="40" height="40" viewBox="0 0 40 40"><path d="M10 5 L35 20 L10 35Z" fill="#fff" stroke="#fff" stroke-width="4" stroke-linejoin="round"/></svg>`;
+const ICON_GRID=`<svg width="34" height="34" viewBox="0 0 34 34" fill="#fff"><rect x="1" y="1" width="14" height="14" rx="4"/><rect x="19" y="1" width="14" height="14" rx="4"/><rect x="1" y="19" width="14" height="14" rx="4"/><rect x="19" y="19" width="14" height="14" rx="4"/></svg>`;
+const ICON_Q=`<svg width="36" height="36" viewBox="0 0 36 36"><circle cx="18" cy="18" r="16" fill="none" stroke="#fff" stroke-width="4"/><path d="M13 14a5 5 0 1 1 7 4.5c-1.5.8-2 1.6-2 3.5" stroke="#fff" stroke-width="4" fill="none" stroke-linecap="round"/><circle cx="18" cy="27" r="2.4" fill="#fff"/></svg>`;
+const ICON_SHIELD=`<svg width="30" height="34" viewBox="0 0 30 34"><path d="M15 2 L27 7 V16 C27 24 21 30 15 32 C9 30 3 24 3 16 V7Z" fill="#fff"/><path d="M9 17 l4 4 l8 -9" stroke="#ff5fa6" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const ICON_BACK=`<svg width="40" height="40" viewBox="0 0 40 40"><path d="M25 6 L11 20 L25 34" stroke="#fff" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const ICON_RETRY=`<svg width="34" height="34" viewBox="0 0 34 34"><path d="M28 17a11 11 0 1 1-4-8.5" stroke="#fff" stroke-width="4.5" fill="none" stroke-linecap="round"/><path d="M26 2v8h-8" stroke="#fff" stroke-width="4.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+$("btnHint").innerHTML=ICON_BULB+"İpucu";
+$("btnPlay").innerHTML=ICON_PLAY+"Oyna";
+$("btnLevels").innerHTML=ICON_GRID+"Seviyeler";
+$("btnHow").innerHTML=ICON_Q+"Nasıl Oynanır?";
+$("btnPriv").innerHTML=ICON_SHIELD+"Gizlilik Politikası";
+$("btnLvBack").innerHTML=ICON_BACK;
+$("btnWinLevels").innerHTML=ICON_GRID+"Seviyeler";
+$("btnRetry").innerHTML=ICON_RETRY+"Tekrar";
+$("btnNext").innerHTML="Sonraki"+ICON_PLAY;
+$("hand").innerHTML=`<path d="M24 6 a7 7 0 0 1 14 0 V34 l4 -3 a7 7 0 0 1 14 2 a7 7 0 0 1 10 6 V56 Q66 76 46 78 H36 Q22 78 14 64 L4 46 a7 7 0 0 1 12 -7 L24 50Z" transform="scale(.9)" fill="#fff" stroke="#3a3a44" stroke-width="4" stroke-linejoin="round"/>`;
+
+$("btnPlay").addEventListener("click",()=>{SFX.ui();startLevel(firstPlayable());});
+$("btnLevels").addEventListener("click",()=>{SFX.ui();renderLevels();showScreen("scrLevels");});
+$("btnHow").addEventListener("click",()=>{SFX.ui();openOv("ovHow");});
+$("btnPriv").addEventListener("click",()=>{SFX.ui();openOv("ovPriv");});
+$("btnLvBack").addEventListener("click",e=>{e.stopPropagation();SFX.ui();closeAllOv();showScreen("scrMenu");});
+$("btnGMenu").addEventListener("click",()=>{SFX.ui();closeOv("ovWin");showScreen("scrMenu");});
+$("btnHint").addEventListener("click",()=>hint());
+document.querySelectorAll(".sndBtn").forEach(b=>b.addEventListener("click",e=>{e.stopPropagation();initAudio();setMusic(!save.music);SFX.ui();}));
+$("btnRetry").addEventListener("click",()=>{SFX.ui();closeOv("ovWin");startLevel(G.lv);});
+$("btnWinLevels").addEventListener("click",()=>{SFX.ui();closeOv("ovWin");renderLevels();showScreen("scrLevels");});
+$("btnNext").addEventListener("click",()=>{SFX.ui();closeOv("ovWin");const n=G.lv+1;
+  if(n>TOTAL){showScreen("scrMenu");return;}
+  if(payLocked(n)){renderLevels();showScreen("scrLevels");openPay(n);return;}
+  startLevel(n);});
+document.addEventListener("contextmenu",e=>e.preventDefault());
+/* Android geri tuşu (Capacitor) */
+document.addEventListener("backbutton",()=>{const o=document.querySelector(".ov.on");if(o){closeOv(o.id);return;}if(!$("scrMenu").classList.contains("on"))showScreen("scrMenu");});
+
+/* ---------- BAŞLANGIÇ ---------- */
+drawBg();drawTub();updSoundBtns();
+$("menuTitle").innerHTML=rainbow("Panda Su Yolu");
+$("lvHead").innerHTML=rainbow("Seviyeler",2);
+$("menuPanda").innerHTML=`<g transform="translate(0 -10) scale(1.4)">${pandaBadge(true)}</g><g transform="translate(-70 95)"><ellipse rx="40" ry="10" fill="#7fd0ff" stroke="#3aa7f5" stroke-width="3"/></g>`;
+$("menuFaucet").innerHTML=`<g transform="translate(0 10) scale(1.35)">${faucetSVG()}</g><path d="M0 70 q-10 16 0 22 q10 -6 0 -22z" fill="#7fd0ff" class="drip"/>`;
+$("winPanda").innerHTML=pandaBadge(true);$("payPanda").innerHTML=pandaBadge(true);$("howPanda").innerHTML=pandaBadge(true);
+$("howPipe").innerHTML=`<rect width="100" height="100" rx="14" fill="#c99863"/><g style="transform-origin:50px 50px;animation:howRot 2s ease-in-out infinite">${pipeSVG("L")}</g>`;
+$("howFaucet").innerHTML=`<g transform="scale(.9) translate(0 12)">${faucetSVG()}</g>`;
+st.textContent+="@keyframes howRot{0%,30%{transform:rotate(0)}50%,80%{transform:rotate(90deg)}100%{transform:rotate(90deg)}}";
+showScreen("scrMenu");
+/* Standart Panda Games Studio açılışı: 2 sn görünür, ardından yumuşak geçişle ana menü */
+setTimeout(()=>{$("splash").classList.add("hide");setTimeout(()=>$("splash").remove(),550);},2000);
+</script>
+</body>
+</html>

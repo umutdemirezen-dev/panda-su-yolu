@@ -1,0 +1,10 @@
+{
+  "appId": "com.pandagamesstudio.suyolu",
+  "appName": "Panda Su Yolu",
+  "webDir": "www",
+  "android": {
+    "backgroundColor": "#BFE8F7",
+    "allowMixedContent": false,
+    "webContentsDebuggingEnabled": false
+  }
+}
