@@ -1,0 +1,117 @@
+name: Android APK ve AAB Derle
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Panda Su Yolu (APK + AAB)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      # Imzalama anahtari GitHub Secrets'a eklendiyse imzali release APK/AAB uretilir
+      HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+
+    steps:
+      - name: Kodu al
+        uses: actions/checkout@v4
+
+      - name: Node.js 22 kur
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Java 21 (Temurin) kur
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Ortami kontrol et
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          ls "$ANDROID_HOME/platforms" "$ANDROID_HOME/build-tools"
+          java -version
+          node -v
+
+      - name: npm paketlerini yukle
+        run: npm install --no-audit --no-fund
+
+      - name: Android platformunu olustur
+        run: |
+          rm -rf android
+          npx cap add android
+
+      - name: Uygulama ikonu ve acilis ekranini uret (assets/)
+        run: |
+          npx --yes @capacitor/assets@3 generate --android \
+            --iconBackgroundColor "#B6F0FC" --iconBackgroundColorDark "#B6F0FC" \
+            --splashBackgroundColor "#BFE8F7" --splashBackgroundColorDark "#BFE8F7"
+
+      - name: Android projesini hazirla (yatay ekran, tam ekran, uygulama adi, surum numarasi)
+        run: node scripts/patch-android.js
+
+      - name: Web dosyalarini ve eklentileri esitle
+        run: npx cap sync android
+
+      - name: SDK yolunu Gradle'a bildir
+        run: echo "sdk.dir=$ANDROID_HOME" > android/local.properties
+
+      - name: Gradle ile debug APK + release APK + release AAB derle
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug assembleRelease bundleRelease --no-daemon --stacktrace
+
+      - name: Debug APK'yi hazirla (telefona dogrudan kurulum/test icin)
+        run: |
+          mkdir -p dist
+          cp android/app/build/outputs/apk/debug/app-debug.apk dist/panda-su-yolu-debug.apk
+
+      - name: Release APK ve AAB'yi imzala (Play Store icin)
+        if: env.HAS_KEYSTORE == 'true'
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -e
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/upload.jks"
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          echo "build-tools: $BT"
+
+          # APK: zipalign + apksigner
+          "$BT/zipalign" -p -f 4 android/app/build/outputs/apk/release/app-release-unsigned.apk "$RUNNER_TEMP/aligned.apk"
+          "$BT/apksigner" sign --ks "$RUNNER_TEMP/upload.jks" \
+            --ks-pass env:ANDROID_KEYSTORE_PASSWORD \
+            --ks-key-alias "$ANDROID_KEY_ALIAS" \
+            --key-pass env:ANDROID_KEY_PASSWORD \
+            --out dist/panda-su-yolu-release.apk "$RUNNER_TEMP/aligned.apk"
+          "$BT/apksigner" verify --print-certs dist/panda-su-yolu-release.apk | head -3
+
+          # AAB: jarsigner
+          cp android/app/build/outputs/bundle/release/app-release.aab dist/panda-su-yolu-release.aab
+          jarsigner -keystore "$RUNNER_TEMP/upload.jks" \
+            -storepass "$ANDROID_KEYSTORE_PASSWORD" -keypass "$ANDROID_KEY_PASSWORD" \
+            -sigalg SHA256withRSA -digestalg SHA-256 \
+            dist/panda-su-yolu-release.aab "$ANDROID_KEY_ALIAS"
+          jarsigner -verify dist/panda-su-yolu-release.aab | tail -1
+          rm -f "$RUNNER_TEMP/upload.jks"
+
+      - name: Imza anahtari yoksa imzasiz AAB'yi koy ve uyar
+        if: env.HAS_KEYSTORE != 'true'
+        run: |
+          cp android/app/build/outputs/bundle/release/app-release.aab dist/panda-su-yolu-IMZASIZ.aab
+          echo "::warning title=AAB imzasiz::Play Console'a yuklemek icin GitHub Secrets'a imzalama anahtarini ekleyin. Debug APK test icin hazir."
+
+      - name: Dosyalari indirilebilir yap
+        uses: actions/upload-artifact@v4
+        with:
+          name: panda-su-yolu-android
+          path: dist/
+          if-no-files-found: error
